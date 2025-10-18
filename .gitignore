@@ -1,0 +1,16 @@
+# Xcode / Swift
+build/
+DerivedData/
+*.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad
+*.swp
+*.swo
+*.dSYM
+# Firebase config (do not commit credentials)
+GoogleService-Info.plist
+# Node / web artifacts
+node_modules/
+# Misc
+.DS_Store
