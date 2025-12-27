@@ -9,5 +9,3 @@ final class ShareIdStore {
         return newId
     }
 }
-
-
