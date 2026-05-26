@@ -97,8 +97,9 @@ Set the same key/cluster in both places:
 python3 -m http.server --directory web 8000
 ```
 
-Then open `http://localhost:8000/index.html?share=YOUR_SHARE_ID`, using the
-Share ID from the app. BPM should update live within a second or two.
+Then open `http://localhost:8000/`. The page shows the live Heart Nebula, which
+breathes in time with the streamed BPM. (The old BPM monitor is at
+`http://localhost:8000/index2.html`.) BPM should update live within a second or two.
 
 > See `PUSHER_SETUP.md` for the full walkthrough, architecture details, and
 > troubleshooting.
