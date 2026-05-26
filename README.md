@@ -1,101 +1,144 @@
 # HeartBeatStream
 
-Native iOS app that reads heart rate data from Apple Health using HealthKit and displays it in real-time.
+Stream your heart rate live from an iPhone to the web. The iOS app reads heart
+rate samples from Apple Health via HealthKit and broadcasts them through
+[Pusher Channels](https://pusher.com) to a real-time web page.
+
+```
+HealthKit → HealthKitManager → HeartRateStreamer → PusherService
+                                                        │
+                                                  Pusher Channels
+                                                        │
+                                                   Web Client
+```
 
 ## Project Layout
 
 - `ios/HeartBeatStream/HeartBeatStream/HeartBeatStream/` – SwiftUI app sources
   - `HealthKitManager.swift` – HealthKit authorization and heart rate observation
-  - `HeartRateStreamer.swift` – Coordinates HealthKit data flow to UI
-  - `ContentView.swift` – Main UI displaying current BPM and status
+  - `HeartRateStreamer.swift` – Coordinates HealthKit data flow to UI and Pusher
+  - `PusherService.swift` – Publishes BPM updates to a Pusher channel
+  - `ContentView.swift` – Main UI displaying current BPM, status, and Share ID
+  - `ShareIdStore.swift` – Generates and persists the unique Share ID
   - `AppDelegate.swift` – App initialization
-  - `ShareIdStore.swift` – Share ID generation and persistence
-- `web/index.html` – Web listener (currently references Firebase; integration pending)
-
-## Prerequisites
-
-- **Xcode 15+** and a **real iPhone** (HealthKit is limited in Simulator)
-- A **Health data source** (e.g., Apple Watch; AirPods if they write HR into Health)
-- **iOS device** with HealthKit enabled
-
-## iOS Setup
-
-1. **Open the project in Xcode:**
-   ```bash
-   xed ios/HeartBeatStream/HeartBeatStream/HeartBeatStream.xcodeproj
-   ```
-
-2. **HealthKit Capability:**
-   - The project includes `HeartBeatStream.entitlements` with HealthKit read access
-   - The `NSHealthShareUsageDescription` is configured in the project settings
-
-3. **Build and Run:**
-   ```bash
-   xcodebuild -scheme HeartBeatStream -destination 'generic/platform=iOS' build
-   ```
-   Or run directly from Xcode on a real iOS device.
+- `web/index.html` – Real-time web listener (subscribes to the Pusher channel)
+- `PUSHER_SETUP.md` – Full, detailed Pusher setup and troubleshooting guide
 
 ## How It Works
 
-The app:
-- Requests HealthKit read permission for heart rate data on first launch
-- Uses `HKObserverQuery` to detect new heart rate samples
-- Uses `HKAnchoredObjectQuery` to fetch only new samples since the last query
-- Displays the current BPM, last update time, and data source in the UI
-- Supports background delivery for continuous monitoring
+1. **iOS app (publisher):** requests HealthKit read access, observes new heart
+   rate samples with `HKObserverQuery` + `HKAnchoredObjectQuery`, and publishes
+   each reading to the Pusher channel `private-heartrate-{shareId}` via a
+   `client-heartrate-update` event.
+2. **Web client (subscriber):** subscribes to the same channel using the Share
+   ID from the URL and updates the BPM display in real time.
+3. **Pusher Channels:** routes messages between the app and the browser over
+   WebSockets. No server code required.
 
-**Note:** HealthKit background delivery can wake the app, but iOS may defer updates when the app is in the background. Start testing with the app in the foreground.
+Each install gets a unique 8-character **Share ID** (persisted in
+`UserDefaults`) that defines its channel — anyone with the ID can view the
+stream.
+
+## Prerequisites
+
+- **Xcode 15+**
+- A **real iPhone** — HealthKit is limited in the Simulator
+- A **Health data source** that writes heart rate (e.g., a paired Apple Watch)
+- A free **Pusher account** ([pusher.com](https://pusher.com))
+
+## Setup
+
+### 1. Create a Pusher app
+
+1. Sign up at [pusher.com](https://pusher.com) and **Create app** → Channels.
+2. Pick a cluster (default in this repo is `eu`).
+3. In **App Settings**, enable **Client Events** (required — the app publishes
+   directly from the client).
+4. From **App Keys**, copy your `key`, `secret`, and `cluster`.
+
+### 2. Configure credentials
+
+Set the same key/cluster in both places:
+
+- `ios/.../PusherService.swift` (lines ~10–12): `pusherKey`, `pusherCluster`, `pusherSecret`
+- `web/index.html` (lines ~311–313): `PUSHER_KEY`, `PUSHER_CLUSTER`, `PUSHER_SECRET`
+
+### 3. Build the iOS app
+
+1. Open the project in Xcode:
+   ```bash
+   xed ios/HeartBeatStream/HeartBeatStream/HeartBeatStream.xcodeproj
+   ```
+2. Add the Pusher Swift SDK: **File → Add Package Dependencies…** →
+   `https://github.com/pusher/pusher-websocket-swift.git` (version `10.1.9`),
+   then add the **PusherSwift** library.
+3. Run on a real iPhone (⌘R). Grant HealthKit permission, tap
+   **Start Monitoring**, and note the **Share ID** shown in the UI.
+
+   Or build from the CLI:
+   ```bash
+   xcodebuild -scheme HeartBeatStream -destination 'generic/platform=iOS' build
+   ```
+
+### 4. Open the web client
+
+```bash
+python3 -m http.server --directory web 8000
+```
+
+Then open `http://localhost:8000/index.html?share=YOUR_SHARE_ID`, using the
+Share ID from the app. BPM should update live within a second or two.
+
+> See `PUSHER_SETUP.md` for the full walkthrough, architecture details, and
+> troubleshooting.
+
+## ⚠️ Security Note
+
+The current implementation embeds the Pusher **secret** directly in client code
+(`PusherService.swift` and `web/index.html`) and signs channel auth in the
+browser. A Pusher secret is meant to stay server-side — anyone who reads the
+page source or this repo can use it to sign for any channel, so the "private"
+channels are not actually protected.
+
+This is acceptable for personal use. For anything shared:
+
+- Regenerate the key/secret in the Pusher dashboard if it has been exposed.
+- Move auth to a small server-side endpoint, or use plain public channels if
+  privacy isn't required.
 
 ## Features
 
-- **Real-time Heart Rate Display** – Shows current BPM with large, easy-to-read numbers
-- **Status Indicators** – Visual feedback for connection status (Monitoring, Connecting, Failed, Stopped)
-- **Data Source Information** – Displays which device provided the heart rate data (e.g., Apple Watch)
-- **Last Update Time** – Shows when the most recent heart rate reading was received
+- **Real-time BPM display** with large, easy-to-read numbers
+- **Connection status** indicators (Monitoring, Connecting, Failed, Stopped)
+- **Data source** label (e.g., which Apple Watch provided the reading)
+- **Last update time** for the most recent sample
+- **Live web view** of the stream via Share ID
+- **Rate limiting** — publishes at most once every 2 seconds to stay within
+  Pusher free-tier limits
 
 ## Troubleshooting
 
-- **No heart rate data appearing:**
-  - Ensure Health app has heart rate samples (from Apple Watch or other source)
-  - Check that HealthKit permissions were granted (go to Settings > Privacy & Security > Health)
-  - Verify the app is running on a real iOS device (not Simulator)
-  
-- **Permissions denied:**
-  - Go to Settings > Privacy & Security > Health > HeartBeatStream
-  - Enable "Allow HealthKit to Read Data"
+**No heart rate data appearing:**
+- Ensure the Health app has heart rate samples (from an Apple Watch or other source).
+- Check permissions: Settings → Privacy & Security → Health → HeartBeatStream →
+  enable "Allow to Read Data".
+- Run on a real device, not the Simulator.
 
-## Project Structure Details
+**iOS shows "disconnected" / build errors about PusherSwift:**
+- Verify the `pusherKey` and `pusherCluster` are correct.
+- Confirm the PusherSwift package was added (step 3.2).
+- Try **Product → Clean Build Folder** (⇧⌘K) and rebuild.
 
-### Key Components
+**Web client stuck on "Waiting for data":**
+- Open the browser console (F12) and check for errors.
+- Confirm `PUSHER_KEY` / `PUSHER_CLUSTER` match the iOS app.
+- Make sure the Share ID in the URL matches the one shown in the app, and that
+  the app is running and connected.
 
-**HealthKitManager.swift**
-- Handles HealthKit authorization
-- Implements observer and anchored queries for efficient data retrieval
-- Manages background delivery configuration
-
-**HeartRateStreamer.swift**
-- Coordinates between HealthKitManager and UI
-- Provides callback-based updates to ContentView
-- Converts HealthKit samples to BPM values
-
-**ContentView.swift**
-- SwiftUI interface with large BPM display
-- Start/Stop monitoring controls
-- Status and error message display
-
-**ShareIdStore.swift**
-- Generates and persists a unique share ID using UserDefaults
-- Currently unused (prepared for future Firebase integration)
-
-## Future Enhancements
-
-Firebase integration for streaming heart rate data to a web client is planned but not currently implemented. When added, it will:
-- Stream heart rate data to Firebase Realtime Database
-- Enable web clients to view real-time heart rate via share ID
-- Store private user data and public streams
+For more, see the Troubleshooting section in `PUSHER_SETUP.md`.
 
 ## Privacy
 
-- All heart rate data stays on the device
-- HealthKit permissions are requested only for reading heart rate data
-- No data is transmitted to external servers in the current implementation
+- Heart rate data is read only from HealthKit, with explicit user permission.
+- Data is streamed to Pusher and is viewable by anyone holding the Share ID.
+- Rotate your Share ID by deleting and reinstalling the app.

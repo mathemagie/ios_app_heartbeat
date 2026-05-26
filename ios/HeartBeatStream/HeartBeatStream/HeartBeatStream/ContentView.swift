@@ -1,18 +1,31 @@
 import SwiftUI
+import UIKit
+import PusherSwift
 
 struct ContentView: View {
     @State private var isStreaming = false
     @State private var errorMessage: String?
     @State private var connectionStatus: String = "Not Connected"
+    @State private var pusherStatus: String = "Disconnected"
     @State private var currentBPM: Int? = nil
     @State private var lastUpdateTime: Date? = nil
     @State private var dataSource: String = ""
+    @State private var didCopyShareId = false
 
     private let streamer: HeartRateStreamer
+    private let shareId: String
 
     init() {
         let hk = HealthKitManager()
-        self.streamer = HeartRateStreamer(healthKit: hk)
+        let shareIdStore = ShareIdStore()
+        let shareId = shareIdStore.loadOrCreate()
+        self.shareId = shareId
+
+        // Create Pusher service
+        let pusherService = PusherService(shareId: shareId)
+
+        // Create streamer with Pusher integration
+        self.streamer = HeartRateStreamer(healthKit: hk, pusherService: pusherService)
     }
 
     var body: some View {
@@ -20,6 +33,46 @@ struct ContentView: View {
             Text("Heart Rate Monitor")
                 .font(.largeTitle)
                 .fontWeight(.bold)
+
+            // Share ID Display
+            VStack(spacing: 10) {
+                Text("SHARE ID")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+
+                Button {
+                    copyShareId()
+                } label: {
+                    HStack(spacing: 10) {
+                        Text(shareId)
+                            .font(.system(size: 32, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.primary)
+                        Image(systemName: didCopyShareId ? "checkmark.circle.fill" : "doc.on.doc")
+                            .font(.title3)
+                            .foregroundStyle(didCopyShareId ? .green : .accentColor)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                Text(didCopyShareId ? "Copied!" : "Tap to copy")
+                    .font(.caption2)
+                    .foregroundStyle(didCopyShareId ? .green : .secondary)
+
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(pusherStatusColor)
+                        .frame(width: 6, height: 6)
+                    Text("Pusher: \(pusherStatus)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity)
+            .background(Color.gray.opacity(0.1))
+            .cornerRadius(12)
 
             // Heart Rate Display
             VStack(spacing: 15) {
@@ -92,9 +145,10 @@ struct ContentView: View {
                 } else {
                     connectionStatus = "Connecting..."
                     errorMessage = nil
+
                     // Set up callback to receive heart rate updates
                     streamer.onHeartRateUpdate = { bpm, date, source in
-                        DispatchQueue.main.async {
+                        Task { @MainActor in
                             currentBPM = bpm
                             lastUpdateTime = date
                             dataSource = source
@@ -103,8 +157,16 @@ struct ContentView: View {
                             }
                         }
                     }
+
+                    // Set up Pusher connection state callback
+                    streamer.onPusherConnectionChange = { (state: ConnectionState) in
+                        Task { @MainActor in
+                            pusherStatus = state.stringValue()
+                        }
+                    }
+
                     streamer.start { success, error in
-                        DispatchQueue.main.async {
+                        Task { @MainActor in
                             if success {
                                 isStreaming = true
                                 connectionStatus = "Monitoring"
@@ -131,6 +193,20 @@ struct ContentView: View {
         .padding()
     }
     
+    private func copyShareId() {
+        UIPasteboard.general.string = shareId
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+        withAnimation {
+            didCopyShareId = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            withAnimation {
+                didCopyShareId = false
+            }
+        }
+    }
+
     private func formatTime(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.timeStyle = .medium
@@ -147,6 +223,19 @@ struct ContentView: View {
             return .red
         default:
             return .gray
+        }
+    }
+
+    private var pusherStatusColor: Color {
+        switch pusherStatus {
+        case "connected":
+            return .green
+        case "connecting", "reconnecting":
+            return .orange
+        case "disconnected", "disconnecting":
+            return .gray
+        default:
+            return .red
         }
     }
 }
