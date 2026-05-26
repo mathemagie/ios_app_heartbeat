@@ -29,7 +29,7 @@
       width: 100vw;
       height: 100vh;
       height: 100dvh;
-      background: url('/web/nebu.jpg') no-repeat center center / cover;
+      background: url('nebu.jpg') no-repeat center center / cover;
       animation: pulse 1s ease-in-out infinite;
       /* Smoothly ease between heart rates when the BPM changes */
       transition: animation-duration 1.2s cubic-bezier(0.37, 0, 0.63, 1);
@@ -59,15 +59,35 @@
       font-weight: 800;
       letter-spacing: -2px;
       line-height: 1;
+      display: inline-block;
+      transform-origin: center bottom;
+      /* Law 7: the number beats in time with the nebula (lub-dub). */
+      animation: beat 1s ease-in-out infinite;
+      will-change: transform;
     }
 
     .hud .bpm.idle { opacity: 0.4; }
 
+    /* Law 7 EMOTION: a strong "lub" then softer "dub", synced to the BPM. */
+    @keyframes beat {
+      0%        { transform: scale(1); }
+      12%       { transform: scale(1.09); }
+      28%       { transform: scale(1.00); }
+      40%       { transform: scale(1.04); }
+      55%, 100% { transform: scale(1); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .hud .bpm { animation: none; }
+    }
+
+    /* Law 6: demote the unit to a quiet caption so the number dominates. */
     .hud .unit {
-      font-size: 16px;
+      font-size: 11px;
       font-weight: 600;
-      opacity: 0.75;
-      margin-top: 2px;
+      letter-spacing: 3px;
+      opacity: 0.55;
+      margin-top: 6px;
     }
 
     .hud .meta {
@@ -76,7 +96,7 @@
       margin-top: 8px;
     }
 
-    /* Connection dot, top-right */
+    /* Connection dot, top-right. Law 1: recedes once connected. */
     .status {
       position: fixed;
       top: calc(18px + env(safe-area-inset-top));
@@ -87,7 +107,10 @@
       color: rgba(255, 255, 255, 0.7);
       font-size: 12px;
       z-index: 10;
+      transition: opacity 1.2s ease;
     }
+
+    .status.hidden { opacity: 0; }
 
     .dot {
       width: 8px;
@@ -97,6 +120,32 @@
     }
 
     .dot.connected { background: #34c759; box-shadow: 0 0 8px #34c759; }
+
+    /* Law 4: a quiet self-explaining mark, top-left. Recedes after a moment. */
+    .mark {
+      position: fixed;
+      top: calc(18px + env(safe-area-inset-top));
+      left: calc(20px + env(safe-area-inset-left));
+      z-index: 10;
+      color: #fff;
+      max-width: 62vw;
+      text-shadow: 0 2px 18px rgba(0, 0, 0, 0.8);
+      transition: opacity 1.5s ease;
+    }
+
+    .mark .title {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .mark .sub {
+      font-size: 11px;
+      opacity: 0.6;
+      margin-top: 2px;
+    }
+
+    .mark.recede { opacity: 0.22; }
 
     /* The breathing animation: a strong "lub", softer "dub", then rest.
        Values come from CSS variables set per-keyframe in JavaScript. */
@@ -121,7 +170,12 @@
 <body>
   <div class="nebula" id="nebula"></div>
 
-  <div class="status">
+  <div class="mark" id="mark">
+    <div class="title">Heart Nebula</div>
+    <div class="sub">IC 1805 · beating at a live heart rate</div>
+  </div>
+
+  <div class="status" id="status">
     <span class="dot" id="dot"></span>
     <span id="status-text">connecting…</span>
   </div>
@@ -141,6 +195,8 @@
     const metaEl = document.getElementById("meta");
     const dotEl = document.getElementById("dot");
     const statusEl = document.getElementById("status-text");
+    const statusBox = document.getElementById("status");
+    const mark = document.getElementById("mark");
 
     // Build the per-keyframe breathing curve once. A strong systolic "lub"
     // and softer "dub" peak, plus a faint baseline tremor during the rest.
@@ -164,13 +220,23 @@
     }
 
     // Map a heart rate to one breathing cycle: one beat per cycle.
+    // The nebula AND the BPM number share the same period, so they beat as one.
     function setHeartRate(bpm) {
       const clamped = Math.max(30, Math.min(220, bpm));
-      const period = 60 / clamped; // seconds per beat
-      nebula.style.animationDuration = period.toFixed(3) + "s";
+      const period = (60 / clamped).toFixed(3) + "s";
+      nebula.style.animationDuration = period;
+      bpmEl.style.animationDuration = period;
     }
 
     buildPulseCurve();
+
+    // Law 4: let the intro mark recede after it has been read.
+    setTimeout(() => mark.classList.add("recede"), 6000);
+
+    // Publishable Pusher credentials (safe to expose — the SECRET is never here,
+    // it lives only in the Vercel serverless function). Used as a fallback when
+    // /api/config isn't available, e.g. on a plain localhost static server.
+    const FALLBACK_CONFIG = { key: "3b88050d4007e937f6d7", cluster: "eu" };
 
     document.addEventListener("DOMContentLoaded", async () => {
       let config;
@@ -178,17 +244,26 @@
         config = await (await fetch("/api/config")).json();
         if (!config.key) throw new Error("missing key");
       } catch (e) {
-        statusEl.textContent = "config error";
-        metaEl.textContent = "Could not load Pusher config";
-        return;
+        // No serverless API here (localhost) — use the public key directly.
+        config = FALLBACK_CONFIG;
       }
 
       const pusher = new Pusher(config.key, { cluster: config.cluster });
       const channel = pusher.subscribe(`heartrate-${SHARE_ID}`);
 
+      let hideTimer;
       pusher.connection.bind("state_change", (s) => {
         statusEl.textContent = s.current;
-        dotEl.classList.toggle("connected", s.current === "connected");
+        const connected = s.current === "connected";
+        dotEl.classList.toggle("connected", connected);
+        // Law 1 (Hide) + Law 6: once connected, let the status recede;
+        // bring it back the moment the connection is no longer healthy.
+        clearTimeout(hideTimer);
+        if (connected) {
+          hideTimer = setTimeout(() => statusBox.classList.add("hidden"), 2500);
+        } else {
+          statusBox.classList.remove("hidden");
+        }
       });
 
       channel.bind("heartrate-update", (data) => {
