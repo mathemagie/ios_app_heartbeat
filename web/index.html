@@ -1,411 +1,206 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Heart Rate Monitor - Live</title>
-    <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Heart Nebula — Live</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Heart Nebula">
+  <script src="https://js.pusher.com/8.4.0-rc2/pusher.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      height: 100dvh;
+      background: black;
+      overflow: hidden;
+      overscroll-behavior: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    /* The nebula image that breathes in time with the heartbeat */
+    .nebula {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      background: url('/web/nebu.jpg') no-repeat center center / cover;
+      animation: pulse 1s ease-in-out infinite;
+      /* Smoothly ease between heart rates when the BPM changes */
+      transition: animation-duration 1.2s cubic-bezier(0.37, 0, 0.63, 1);
+      will-change: filter, transform;
+      pointer-events: none;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .nebula { animation: none; }
+    }
+
+    /* BPM read-out overlaid on the nebula */
+    .hud {
+      position: fixed;
+      bottom: calc(28px + env(safe-area-inset-bottom));
+      left: 0;
+      right: 0;
+      text-align: center;
+      color: #fff;
+      z-index: 10;
+      pointer-events: none;
+      text-shadow: 0 2px 18px rgba(0, 0, 0, 0.8);
+    }
+
+    .hud .bpm {
+      font-size: 64px;
+      font-weight: 800;
+      letter-spacing: -2px;
+      line-height: 1;
+    }
+
+    .hud .bpm.idle { opacity: 0.4; }
+
+    .hud .unit {
+      font-size: 16px;
+      font-weight: 600;
+      opacity: 0.75;
+      margin-top: 2px;
+    }
+
+    .hud .meta {
+      font-size: 12px;
+      opacity: 0.55;
+      margin-top: 8px;
+    }
+
+    /* Connection dot, top-right */
+    .status {
+      position: fixed;
+      top: calc(18px + env(safe-area-inset-top));
+      right: calc(18px + env(safe-area-inset-right));
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 12px;
+      z-index: 10;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #888;
+    }
+
+    .dot.connected { background: #34c759; box-shadow: 0 0 8px #34c759; }
+
+    /* The breathing animation: a strong "lub", softer "dub", then rest.
+       Values come from CSS variables set per-keyframe in JavaScript. */
+    @keyframes pulse {
+      0%   { filter: brightness(var(--b-0))   saturate(var(--s-0))   hue-rotate(var(--h-0));   transform: scale(var(--c-0)); }
+      6%   { filter: brightness(var(--b-6))   saturate(var(--s-6))   hue-rotate(var(--h-6));   transform: scale(var(--c-6)); }
+      12%  { filter: brightness(var(--b-12))  saturate(var(--s-12))  hue-rotate(var(--h-12));  transform: scale(var(--c-12)); }
+      18%  { filter: brightness(var(--b-18))  saturate(var(--s-18))  hue-rotate(var(--h-18));  transform: scale(var(--c-18)); }
+      25%  { filter: brightness(var(--b-25))  saturate(var(--s-25))  hue-rotate(var(--h-25));  transform: scale(var(--c-25)); }
+      33%  { filter: brightness(var(--b-33))  saturate(var(--s-33))  hue-rotate(var(--h-33));  transform: scale(var(--c-33)); }
+      42%  { filter: brightness(var(--b-42))  saturate(var(--s-42))  hue-rotate(var(--h-42));  transform: scale(var(--c-42)); }
+      50%  { filter: brightness(var(--b-50))  saturate(var(--s-50))  hue-rotate(var(--h-50));  transform: scale(var(--c-50)); }
+      58%  { filter: brightness(var(--b-58))  saturate(var(--s-58))  hue-rotate(var(--h-58));  transform: scale(var(--c-58)); }
+      67%  { filter: brightness(var(--b-67))  saturate(var(--s-67))  hue-rotate(var(--h-67));  transform: scale(var(--c-67)); }
+      75%  { filter: brightness(var(--b-75))  saturate(var(--s-75))  hue-rotate(var(--h-75));  transform: scale(var(--c-75)); }
+      83%  { filter: brightness(var(--b-83))  saturate(var(--s-83))  hue-rotate(var(--h-83));  transform: scale(var(--c-83)); }
+      91%  { filter: brightness(var(--b-91))  saturate(var(--s-91))  hue-rotate(var(--h-91));  transform: scale(var(--c-91)); }
+      100% { filter: brightness(var(--b-100)) saturate(var(--s-100)) hue-rotate(var(--h-100)); transform: scale(var(--c-100)); }
+    }
+  </style>
+</head>
+<body>
+  <div class="nebula" id="nebula"></div>
+
+  <div class="status">
+    <span class="dot" id="dot"></span>
+    <span id="status-text">connecting…</span>
+  </div>
+
+  <div class="hud">
+    <div class="bpm idle" id="bpm">--</div>
+    <div class="unit">BPM</div>
+    <div class="meta" id="meta">Waiting for a heartbeat…</div>
+  </div>
+
+  <script>
+    // Single global stream — same public channel the iOS app publishes to.
+    const SHARE_ID = "live";
+
+    const nebula = document.getElementById("nebula");
+    const bpmEl = document.getElementById("bpm");
+    const metaEl = document.getElementById("meta");
+    const dotEl = document.getElementById("dot");
+    const statusEl = document.getElementById("status-text");
+
+    // Build the per-keyframe breathing curve once. A strong systolic "lub"
+    // and softer "dub" peak, plus a faint baseline tremor during the rest.
+    function buildPulseCurve() {
+      const root = document.documentElement.style;
+      const intensity = 1.5, maxSat = 1.5, maxHue = 6, maxScale = 1.016;
+      const minBright = Math.max(0.6, intensity - 0.4), minSat = 0.9, minScale = 1.0;
+      const keyframes = [0, 6, 12, 18, 25, 33, 42, 50, 58, 67, 75, 83, 91, 100];
+      const lubCenter = 14, lubWidth = 9, dubCenter = 34, dubWidth = 11, dubAmp = 0.6;
+
+      keyframes.forEach(p => {
+        const lub = Math.exp(-Math.pow((p - lubCenter) / lubWidth, 2));
+        const dub = dubAmp * Math.exp(-Math.pow((p - dubCenter) / dubWidth, 2));
+        const baseline = 0.04 * (Math.sin((p / 100) * 2 * Math.PI * 1.7) + 1) / 2;
+        const f = Math.max(0, Math.min(1, lub + dub + baseline));
+        root.setProperty(`--b-${p}`, (minBright + (intensity - minBright) * f).toFixed(3));
+        root.setProperty(`--s-${p}`, (minSat + (maxSat - minSat) * f).toFixed(3));
+        root.setProperty(`--h-${p}`, (maxHue * f).toFixed(2) + "deg");
+        root.setProperty(`--c-${p}`, (minScale + (maxScale - minScale) * f).toFixed(5));
+      });
+    }
+
+    // Map a heart rate to one breathing cycle: one beat per cycle.
+    function setHeartRate(bpm) {
+      const clamped = Math.max(30, Math.min(220, bpm));
+      const period = 60 / clamped; // seconds per beat
+      nebula.style.animationDuration = period.toFixed(3) + "s";
+    }
+
+    buildPulseCurve();
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      let config;
+      try {
+        config = await (await fetch("/api/config")).json();
+        if (!config.key) throw new Error("missing key");
+      } catch (e) {
+        statusEl.textContent = "config error";
+        metaEl.textContent = "Could not load Pusher config";
+        return;
       }
 
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        min-height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-        position: relative;
-        overflow: hidden;
-      }
+      const pusher = new Pusher(config.key, { cluster: config.cluster });
+      const channel = pusher.subscribe(`heartrate-${SHARE_ID}`);
 
-      /* Animated background gradient */
-      body::before {
-        content: '';
-        position: absolute;
-        top: -50%;
-        left: -50%;
-        width: 200%;
-        height: 200%;
-        background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
-        background-size: 50px 50px;
-        animation: moveBackground 20s linear infinite;
-        z-index: 0;
-      }
+      pusher.connection.bind("state_change", (s) => {
+        statusEl.textContent = s.current;
+        dotEl.classList.toggle("connected", s.current === "connected");
+      });
 
-      @keyframes moveBackground {
-        0% { transform: translate(0, 0); }
-        100% { transform: translate(50px, 50px); }
-      }
-
-      .container {
-        position: relative;
-        z-index: 1;
-        background: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(20px);
-        border-radius: 30px;
-        padding: 60px 40px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.1);
-        max-width: 500px;
-        width: 100%;
-        text-align: center;
-        animation: fadeIn 0.8s ease-out;
-      }
-
-      @keyframes fadeIn {
-        from {
-          opacity: 0;
-          transform: translateY(20px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-
-      h1 {
-        color: white;
-        font-size: 2rem;
-        font-weight: 700;
-        margin-bottom: 10px;
-        letter-spacing: -0.5px;
-      }
-
-      .subtitle {
-        color: rgba(255, 255, 255, 0.7);
-        font-size: 0.9rem;
-        margin-bottom: 40px;
-        font-weight: 400;
-      }
-
-      /* Heart icon animation */
-      .heart-icon {
-        font-size: 3rem;
-        margin-bottom: 30px;
-        animation: heartbeat 1.5s ease-in-out infinite;
-        display: inline-block;
-      }
-
-      @keyframes heartbeat {
-        0%, 100% { transform: scale(1); }
-        10% { transform: scale(1.1); }
-        20% { transform: scale(1); }
-        30% { transform: scale(1.1); }
-        40% { transform: scale(1); }
-      }
-
-      /* BPM Display */
-      .bpm-container {
-        background: rgba(255, 255, 255, 0.15);
-        border-radius: 20px;
-        padding: 40px 20px;
-        margin: 30px 0;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        position: relative;
-        overflow: hidden;
-      }
-
-      .bpm-container::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: -100%;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
-        animation: shimmer 3s infinite;
-      }
-
-      @keyframes shimmer {
-        0% { left: -100%; }
-        100% { left: 100%; }
-      }
-
-      #bpm {
-        font-size: 5rem;
-        font-weight: 800;
-        color: white;
-        line-height: 1;
-        text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        letter-spacing: -2px;
-        transition: all 0.3s ease;
-      }
-
-      #bpm.pulse {
-        animation: bpmPulse 0.3s ease;
-      }
-
-      @keyframes bpmPulse {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.05); }
-      }
-
-      .bpm-label {
-        color: rgba(255, 255, 255, 0.8);
-        font-size: 1.1rem;
-        font-weight: 600;
-        margin-top: 10px;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-      }
-
-      /* Meta info */
-      #meta {
-        color: rgba(255, 255, 255, 0.7);
-        font-size: 0.9rem;
-        margin: 20px 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 15px;
-      }
-
-      #meta::before {
-        content: '📱';
-        font-size: 1.2rem;
-      }
-
-      /* Status badge */
-      #status {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 10px 20px;
-        border-radius: 25px;
-        background: rgba(255, 255, 255, 0.15);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        font-size: 0.85rem;
-        color: rgba(255, 255, 255, 0.9);
-        margin: 20px 0;
-        transition: all 0.3s ease;
-      }
-
-      .status-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: #94a3b8;
-        transition: all 0.3s ease;
-      }
-
-      .status-dot.connected {
-        background: #4ade80;
-        box-shadow: 0 0 10px #4ade80, 0 0 20px rgba(74, 222, 128, 0.5);
-        animation: pulse-dot 2s infinite;
-      }
-
-      @keyframes pulse-dot {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.6; }
-      }
-
-      /* Share ID section */
-      .share-section {
-        margin-top: 40px;
-        padding-top: 30px;
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
-      }
-
-      .share-label {
-        color: rgba(255, 255, 255, 0.6);
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin-bottom: 8px;
-        font-weight: 600;
-      }
-
-      .share-id {
-        display: inline-block;
-        background: rgba(0, 0, 0, 0.3);
-        color: #fff;
-        padding: 12px 24px;
-        border-radius: 12px;
-        font-family: 'Monaco', 'Courier New', monospace;
-        font-size: 1.1rem;
-        letter-spacing: 2px;
-        font-weight: 600;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        cursor: pointer;
-        transition: all 0.2s ease;
-      }
-
-      .share-id:hover {
-        background: rgba(0, 0, 0, 0.4);
-        transform: translateY(-2px);
-      }
-
-      /* Waiting state */
-      .waiting {
-        color: rgba(255, 255, 255, 0.5);
-        font-style: italic;
-      }
-
-      /* Responsive design */
-      @media (max-width: 600px) {
-        .container {
-          padding: 40px 25px;
-        }
-
-        h1 {
-          font-size: 1.5rem;
-        }
-
-        .heart-icon {
-          font-size: 2.5rem;
-        }
-
-        #bpm {
-          font-size: 4rem;
-        }
-
-        .bpm-container {
-          padding: 30px 15px;
-        }
-      }
-
-      /* Loading animation */
-      .loading-dots {
-        display: inline-flex;
-        gap: 4px;
-      }
-
-      .loading-dots span {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.5);
-        animation: loading 1.4s infinite;
-      }
-
-      .loading-dots span:nth-child(2) {
-        animation-delay: 0.2s;
-      }
-
-      .loading-dots span:nth-child(3) {
-        animation-delay: 0.4s;
-      }
-
-      @keyframes loading {
-        0%, 80%, 100% {
-          opacity: 0.3;
-          transform: scale(1);
-        }
-        40% {
-          opacity: 1;
-          transform: scale(1.2);
-        }
-      }
-    </style>
-    <script src="https://js.pusher.com/8.4.0-rc2/pusher.min.js"></script>
-    <script>
-      // Single global stream — no per-user ID in the URL.
-      const shareId = 'live'
-
-      // Update UI elements
-      document.addEventListener('DOMContentLoaded', async () => {
-        document.getElementById('share-id').textContent = location.host
-
-        // Fetch the *public* Pusher config (key + cluster) from the serverless
-        // API. The secret stays in Vercel env vars and never reaches the browser.
-        let config
-        try {
-          const res = await fetch('/api/config')
-          config = await res.json()
-          if (!config.key) throw new Error('missing key')
-        } catch (error) {
-          console.error('Failed to load Pusher config:', error)
-          document.getElementById('bpm').textContent = 'Error'
-          document.getElementById('meta').textContent = 'Config unavailable'
-          return
-        }
-
-        // Initialize Pusher with the public key (no auth, no secret, no crypto)
-        const pusher = new Pusher(config.key, { cluster: config.cluster })
-
-        // Subscribe to the PUBLIC heart rate channel
-        const channel = pusher.subscribe(`heartrate-${shareId}`)
-
-        // Handle connection state
-        pusher.connection.bind('state_change', (states) => {
-          const statusDot = document.getElementById('status-dot')
-          const statusText = document.getElementById('status-text')
-
-          statusText.textContent = states.current
-          statusDot.className = 'status-dot'
-
-          if (states.current === 'connected') {
-            statusDot.classList.add('connected')
-          }
-        })
-
-        // Listen for heart rate updates
-        channel.bind('heartrate-update', (data) => {
-          const bpmElement = document.getElementById('bpm')
-          bpmElement.textContent = data.bpm
-
-          // Add pulse animation
-          bpmElement.classList.remove('pulse')
-          setTimeout(() => bpmElement.classList.add('pulse'), 10)
-
-          // Format timestamp
-          const timestamp = new Date(data.timestamp)
-          const timeString = timestamp.toLocaleTimeString()
-
-          document.getElementById('meta').textContent = `${data.source} • ${timeString}`
-        })
-
-        // Handle subscription errors
-        channel.bind('pusher:subscription_error', (error) => {
-          console.error('Subscription error:', error)
-          document.getElementById('bpm').textContent = 'Error'
-          document.getElementById('meta').textContent = 'Failed to subscribe'
-        })
-
-        // Click to copy the stream URL
-        document.getElementById('share-id').addEventListener('click', function() {
-          navigator.clipboard.writeText(location.origin + '/').then(() => {
-            const original = this.textContent
-            this.textContent = '✓ Copied!'
-            setTimeout(() => {
-              this.textContent = original
-            }, 2000)
-          })
-        })
-      })
-    </script>
-  </head>
-  <body>
-    <div class="container">
-      <div class="heart-icon">❤️</div>
-      <h1>Heart Rate Monitor</h1>
-      <p class="subtitle">Real-time health tracking</p>
-
-      <div class="bpm-container">
-        <div id="bpm" class="waiting">—</div>
-        <div class="bpm-label">Beats per Minute</div>
-      </div>
-
-      <div id="meta" class="waiting">
-        Waiting for data
-        <span class="loading-dots">
-          <span></span><span></span><span></span>
-        </span>
-      </div>
-
-      <div id="status">
-        <span id="status-dot" class="status-dot"></span>
-        <span id="status-text">Connecting...</span>
-      </div>
-
-      <div class="share-section">
-        <div class="share-label">Live stream</div>
-        <div class="share-id" id="share-id" title="Click to copy link"></div>
-      </div>
-    </div>
-  </body>
+      channel.bind("heartrate-update", (data) => {
+        const bpm = Number(data.bpm);
+        if (!Number.isFinite(bpm)) return;
+        setHeartRate(bpm);
+        bpmEl.textContent = bpm;
+        bpmEl.classList.remove("idle");
+        const t = new Date(data.timestamp || Date.now()).toLocaleTimeString();
+        metaEl.textContent = `${data.source || "unknown"} • ${t}`;
+      });
+    });
+  </script>
+</body>
 </html>
