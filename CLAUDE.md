@@ -7,8 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **iOS App:**
 - Open in Xcode: `xed ios/HeartBeatStream`
 - Build via CLI: `xcodebuild -scheme HeartBeatStream -destination 'generic/platform=iOS' build`
-- Run on simulator: `xcodebuild -scheme HeartBeatStream -destination 'platform=iOS Simulator,name=iPhone 15' test`
-- **Note:** HealthKit requires a real iOS device with heart rate data (e.g., from Apple Watch). Simulator testing is limited.
+- **Build, install & launch on simulator:** `./scripts/run-simulator.sh` (optional arg picks the device, e.g. `./scripts/run-simulator.sh "iPhone 16"`)
+- **Note:** HealthKit requires a real iOS device with heart rate data (e.g., from Apple Watch). The Simulator has no heart-rate sensor, so live BPM stays at `--`; use it only to test UI (Share ID, copy button, Pusher connection).
 
 **Web Client:**
 - Serve locally: `python3 -m http.server --directory web 8000`

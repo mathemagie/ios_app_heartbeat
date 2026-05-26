@@ -189,6 +189,45 @@ struct ContentView: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+
+            #if DEBUG
+            // Simulator helper: feeds random BPM into the UI + Pusher,
+            // bypassing HealthKit (which has no sensor in the Simulator).
+            Button(isStreaming ? "Stop Mock Data" : "Simulate Heart Rate (Debug)") {
+                if isStreaming {
+                    streamer.stop()
+                    isStreaming = false
+                    connectionStatus = "Stopped"
+                    currentBPM = nil
+                    errorMessage = nil
+                } else {
+                    errorMessage = nil
+                    connectionStatus = "Connecting..."
+
+                    streamer.onHeartRateUpdate = { bpm, date, source in
+                        Task { @MainActor in
+                            currentBPM = bpm
+                            lastUpdateTime = date
+                            dataSource = source
+                            connectionStatus = "Monitoring (Mock)"
+                        }
+                    }
+                    streamer.onPusherConnectionChange = { (state: ConnectionState) in
+                        Task { @MainActor in
+                            pusherStatus = state.stringValue()
+                        }
+                    }
+                    streamer.startMock { success, _ in
+                        Task { @MainActor in
+                            isStreaming = success
+                            connectionStatus = success ? "Monitoring (Mock)" : "Failed"
+                        }
+                    }
+                }
+            }
+            .font(.caption)
+            .buttonStyle(.bordered)
+            #endif
         }
         .padding()
     }

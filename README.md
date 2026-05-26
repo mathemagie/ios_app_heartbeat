@@ -80,6 +80,17 @@ Set the same key/cluster in both places:
    xcodebuild -scheme HeartBeatStream -destination 'generic/platform=iOS' build
    ```
 
+   Or build for the iOS Simulator (run from the repo root):
+   ```bash
+   xcodebuild -project ios/HeartBeatStream/HeartBeatStream/HeartBeatStream.xcodeproj \
+     -scheme HeartBeatStream \
+     -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
+   ```
+
+   > **Note:** The Simulator has no heart-rate sensor, so live BPM stays at `--`.
+   > Use it to test the UI (Share ID, copy button, Pusher connection); use a real
+   > iPhone + Apple Watch for actual heart-rate data.
+
 ### 4. Open the web client
 
 ```bash

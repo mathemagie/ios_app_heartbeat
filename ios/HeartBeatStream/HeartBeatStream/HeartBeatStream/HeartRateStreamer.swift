@@ -53,5 +53,36 @@ final class HeartRateStreamer {
     func stop() {
         hk.stopObservingHeartRate()
         pusher?.disconnect()
+        #if DEBUG
+        stopMock()
+        #endif
     }
+
+    #if DEBUG
+    private var mockTimer: Timer?
+
+    /// Feeds random heart-rate values straight into the UI and Pusher,
+    /// bypassing HealthKit. Useful for testing in the iOS Simulator, which
+    /// has no heart-rate sensor. Debug builds only.
+    func startMock(completion: @escaping (Bool, Error?) -> Void = { _, _ in }) {
+        pusher?.connect()
+
+        let emit: () -> Void = { [weak self] in
+            guard let self = self else { return }
+            let bpm = Int.random(in: 60...120)
+            let now = Date()
+            self.onHeartRateUpdate?(bpm, now, "Mock")
+            self.pusher?.publishHeartRate(bpm: bpm, timestamp: now, source: "Mock")
+        }
+
+        emit() // immediate first value
+        mockTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in emit() }
+        completion(true, nil)
+    }
+
+    func stopMock() {
+        mockTimer?.invalidate()
+        mockTimer = nil
+    }
+    #endif
 }
