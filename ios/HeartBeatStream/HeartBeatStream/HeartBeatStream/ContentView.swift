@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import PusherSwift
 
 struct ContentView: View {
     @State private var isStreaming = false
@@ -13,15 +12,15 @@ struct ContentView: View {
     @State private var didCopyShareId = false
 
     private let streamer: HeartRateStreamer
-    private let shareId: String
+
+    // Single global stream — no per-user ID. The web viewer lives at this URL.
+    private let streamURL = "https://project-56opg.vercel.app"
+    private let shareId = "live"
 
     init() {
         let hk = HealthKitManager()
-        let shareIdStore = ShareIdStore()
-        let shareId = shareIdStore.loadOrCreate()
-        self.shareId = shareId
 
-        // Create Pusher service
+        // Create Pusher service for the single global stream
         let pusherService = PusherService(shareId: shareId)
 
         // Create streamer with Pusher integration
@@ -34,9 +33,9 @@ struct ContentView: View {
                 .font(.largeTitle)
                 .fontWeight(.bold)
 
-            // Share ID Display
+            // Live stream link
             VStack(spacing: 10) {
-                Text("SHARE ID")
+                Text("LIVE STREAM")
                     .font(.caption2)
                     .fontWeight(.semibold)
                     .foregroundStyle(.secondary)
@@ -45,9 +44,11 @@ struct ContentView: View {
                     copyShareId()
                 } label: {
                     HStack(spacing: 10) {
-                        Text(shareId)
-                            .font(.system(size: 32, weight: .bold, design: .monospaced))
+                        Text(streamURL.replacingOccurrences(of: "https://", with: ""))
+                            .font(.system(size: 20, weight: .bold, design: .monospaced))
                             .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
                         Image(systemName: didCopyShareId ? "checkmark.circle.fill" : "doc.on.doc")
                             .font(.title3)
                             .foregroundStyle(didCopyShareId ? .green : .accentColor)
@@ -55,7 +56,7 @@ struct ContentView: View {
                 }
                 .buttonStyle(.plain)
 
-                Text(didCopyShareId ? "Copied!" : "Tap to copy")
+                Text(didCopyShareId ? "Copied!" : "Tap to copy link")
                     .font(.caption2)
                     .foregroundStyle(didCopyShareId ? .green : .secondary)
 
@@ -63,7 +64,7 @@ struct ContentView: View {
                     Circle()
                         .fill(pusherStatusColor)
                         .frame(width: 6, height: 6)
-                    Text("Pusher: \(pusherStatus)")
+                    Text("Stream: \(pusherStatus)")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -159,9 +160,9 @@ struct ContentView: View {
                     }
 
                     // Set up Pusher connection state callback
-                    streamer.onPusherConnectionChange = { (state: ConnectionState) in
+                    streamer.onPusherConnectionChange = { (state: UploadState) in
                         Task { @MainActor in
-                            pusherStatus = state.stringValue()
+                            pusherStatus = state.rawValue
                         }
                     }
 
@@ -212,9 +213,9 @@ struct ContentView: View {
                             connectionStatus = "Monitoring (Mock)"
                         }
                     }
-                    streamer.onPusherConnectionChange = { (state: ConnectionState) in
+                    streamer.onPusherConnectionChange = { (state: UploadState) in
                         Task { @MainActor in
-                            pusherStatus = state.stringValue()
+                            pusherStatus = state.rawValue
                         }
                     }
                     streamer.startMock { success, _ in
@@ -233,7 +234,7 @@ struct ContentView: View {
     }
     
     private func copyShareId() {
-        UIPasteboard.general.string = shareId
+        UIPasteboard.general.string = streamURL
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.success)
         withAnimation {
@@ -267,11 +268,11 @@ struct ContentView: View {
 
     private var pusherStatusColor: Color {
         switch pusherStatus {
-        case "connected":
+        case "ok":
             return .green
-        case "connecting", "reconnecting":
+        case "sending":
             return .orange
-        case "disconnected", "disconnecting":
+        case "idle", "Disconnected":
             return .gray
         default:
             return .red

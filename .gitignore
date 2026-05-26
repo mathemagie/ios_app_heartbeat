@@ -118,3 +118,8 @@ node_modules/
 Network Trash Folder
 Temporary Items
 .apdisk
+.vercel
+.env*
+
+# Playwright MCP artifacts
+.playwright-mcp/

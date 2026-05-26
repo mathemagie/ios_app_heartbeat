@@ -303,62 +303,32 @@
     </style>
     <script src="https://js.pusher.com/8.4.0-rc2/pusher.min.js"></script>
     <script>
-      // Get share ID from URL parameters
-      const params = new URLSearchParams(location.search)
-      const shareId = params.get('share') || 'demo'
-
-      // Configure Pusher
-      const PUSHER_KEY = '3b88050d4007e937f6d7'
-      const PUSHER_CLUSTER = 'eu'
-      const PUSHER_SECRET = 'b23e8785f7e108dfd7ba'
-
-      // HMAC-SHA256 function for Pusher auth
-      async function generatePusherAuth(socketId, channelName) {
-        const stringToSign = `${socketId}:${channelName}`
-        const encoder = new TextEncoder()
-        const keyData = encoder.encode(PUSHER_SECRET)
-        const messageData = encoder.encode(stringToSign)
-
-        const cryptoKey = await crypto.subtle.importKey(
-          'raw',
-          keyData,
-          { name: 'HMAC', hash: 'SHA-256' },
-          false,
-          ['sign']
-        )
-
-        const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData)
-        const hashArray = Array.from(new Uint8Array(signature))
-        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
-
-        return `${PUSHER_KEY}:${hashHex}`
-      }
+      // Single global stream — no per-user ID in the URL.
+      const shareId = 'live'
 
       // Update UI elements
-      document.addEventListener('DOMContentLoaded', () => {
-        document.getElementById('share-id').textContent = shareId
+      document.addEventListener('DOMContentLoaded', async () => {
+        document.getElementById('share-id').textContent = location.host
 
-        // Initialize Pusher
-        const pusher = new Pusher(PUSHER_KEY, {
-          cluster: PUSHER_CLUSTER,
-          encrypted: true,
-          authorizer: (channel) => {
-            return {
-              authorize: async (socketId, callback) => {
-                try {
-                  const auth = await generatePusherAuth(socketId, channel.name)
-                  callback(null, { auth })
-                } catch (error) {
-                  console.error('Auth error:', error)
-                  callback(error, null)
-                }
-              }
-            }
-          }
-        })
+        // Fetch the *public* Pusher config (key + cluster) from the serverless
+        // API. The secret stays in Vercel env vars and never reaches the browser.
+        let config
+        try {
+          const res = await fetch('/api/config')
+          config = await res.json()
+          if (!config.key) throw new Error('missing key')
+        } catch (error) {
+          console.error('Failed to load Pusher config:', error)
+          document.getElementById('bpm').textContent = 'Error'
+          document.getElementById('meta').textContent = 'Config unavailable'
+          return
+        }
 
-        // Subscribe to the private heart rate channel
-        const channel = pusher.subscribe(`private-heartrate-${shareId}`)
+        // Initialize Pusher with the public key (no auth, no secret, no crypto)
+        const pusher = new Pusher(config.key, { cluster: config.cluster })
+
+        // Subscribe to the PUBLIC heart rate channel
+        const channel = pusher.subscribe(`heartrate-${shareId}`)
 
         // Handle connection state
         pusher.connection.bind('state_change', (states) => {
@@ -374,7 +344,7 @@
         })
 
         // Listen for heart rate updates
-        channel.bind('client-heartrate-update', (data) => {
+        channel.bind('heartrate-update', (data) => {
           const bpmElement = document.getElementById('bpm')
           bpmElement.textContent = data.bpm
 
@@ -396,9 +366,9 @@
           document.getElementById('meta').textContent = 'Failed to subscribe'
         })
 
-        // Click to copy Share ID
+        // Click to copy the stream URL
         document.getElementById('share-id').addEventListener('click', function() {
-          navigator.clipboard.writeText(shareId).then(() => {
+          navigator.clipboard.writeText(location.origin + '/').then(() => {
             const original = this.textContent
             this.textContent = '✓ Copied!'
             setTimeout(() => {
@@ -433,8 +403,8 @@
       </div>
 
       <div class="share-section">
-        <div class="share-label">Share ID</div>
-        <div class="share-id" id="share-id" title="Click to copy"></div>
+        <div class="share-label">Live stream</div>
+        <div class="share-id" id="share-id" title="Click to copy link"></div>
       </div>
     </div>
   </body>

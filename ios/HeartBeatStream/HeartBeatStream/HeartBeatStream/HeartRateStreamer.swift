@@ -1,11 +1,10 @@
 import HealthKit
-import PusherSwift
 
 final class HeartRateStreamer {
     private let hk: HealthKitManager
     private let pusher: PusherService?
     var onHeartRateUpdate: ((Int, Date, String) -> Void)? // Callback for UI updates
-    var onPusherConnectionChange: ((ConnectionState) -> Void)?
+    var onPusherConnectionChange: ((UploadState) -> Void)?
 
     init(healthKit: HealthKitManager, pusherService: PusherService? = nil) {
         self.hk = healthKit

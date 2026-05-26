@@ -1,102 +1,94 @@
 import Foundation
-import PusherSwift
 
+/// Upload connection states, surfaced to the UI.
+enum UploadState: String {
+    case idle
+    case sending
+    case ok
+    case error
+}
+
+/// Sends heart-rate readings to the Vercel serverless API, which publishes them
+/// to a public Pusher channel. No Pusher secret lives in the app — the server
+/// holds it. Replaces the previous direct-to-Pusher (PusherSwift) integration.
 final class PusherService {
-    private var pusher: Pusher!
-    private var channel: PusherChannel?
     private let shareId: String
+    private let session: URLSession
 
-    // TODO: Replace with your actual Pusher credentials
-    private let pusherKey = "3b88050d4007e937f6d7"
-    private let pusherCluster = "eu" // e.g., "us2", "eu", "ap1"
-    private let pusherSecret = "b23e8785f7e108dfd7ba" // Get this from Pusher dashboard
+    /// Base URL of the deployed Vercel app, e.g. https://your-app.vercel.app
+    /// Override via the `HEARTBEAT_API_BASE_URL` Info.plist key if present.
+    private let baseURL: URL
 
-    // Rate limiting
+    // Rate limiting: publish at most once every 2 seconds.
     private var lastPublishTime: Date?
-    private let minimumPublishInterval: TimeInterval = 2.0 // Publish at most once every 2 seconds
+    private let minimumPublishInterval: TimeInterval = 2.0
 
-    var onConnectionStateChange: ((ConnectionState) -> Void)?
+    var onConnectionStateChange: ((UploadState) -> Void)?
 
-    init(shareId: String) {
+    init(shareId: String, session: URLSession = .shared) {
         self.shareId = shareId
-        setupPusher()
-    }
+        self.session = session
 
-    private func setupPusher() {
-        let options = PusherClientOptions(
-            authMethod: .inline(secret: pusherSecret), // Only for development/demo
-            host: .cluster(pusherCluster)
-        )
-
-        pusher = Pusher(key: pusherKey, options: options)
-
-        pusher.connection.delegate = self
-
-        // Subscribe to a private channel for this shareId (required for client events)
-        channel = pusher.subscribe(channelName: "private-heartrate-\(shareId)")
+        let configured = Bundle.main.object(forInfoDictionaryKey: "HEARTBEAT_API_BASE_URL") as? String
+        // Deployed Vercel app (override via HEARTBEAT_API_BASE_URL in Info.plist).
+        let urlString = (configured?.isEmpty == false ? configured! : "https://project-56opg.vercel.app")
+        self.baseURL = URL(string: urlString) ?? URL(string: "https://example.com")!
     }
 
     func connect() {
-        pusher.connect()
-        print("📡 Connecting to Pusher...")
+        onConnectionStateChange?(.idle)
+        print("📡 Heart rate API base: \(baseURL.absoluteString)")
     }
 
     func disconnect() {
-        pusher.disconnect()
-        print("📡 Disconnected from Pusher")
+        onConnectionStateChange?(.idle)
     }
 
     func publishHeartRate(bpm: Int, timestamp: Date, source: String) {
-        guard let channel = channel else {
-            print("⚠️ Channel not available")
+        // Rate limiting.
+        let now = Date()
+        if let last = lastPublishTime, now.timeIntervalSince(last) < minimumPublishInterval {
             return
         }
-
-        // Rate limiting: only publish if enough time has passed
-        let now = Date()
-        if let lastPublish = lastPublishTime {
-            let timeSinceLastPublish = now.timeIntervalSince(lastPublish)
-            if timeSinceLastPublish < minimumPublishInterval {
-                // Skip this publish - too soon
-                return
-            }
-        }
+        lastPublishTime = now
 
         let isoFormatter = ISO8601DateFormatter()
         isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
-        let data: [String: Any] = [
+        let body: [String: Any] = [
             "bpm": bpm,
             "timestamp": isoFormatter.string(from: timestamp),
             "source": source,
             "shareId": shareId
         ]
 
-        // Trigger client event (requires client events to be enabled in Pusher dashboard)
-        channel.trigger(eventName: "client-heartrate-update", data: data)
+        guard let payload = try? JSONSerialization.data(withJSONObject: body) else {
+            onConnectionStateChange?(.error)
+            return
+        }
 
-        // Update last publish time
-        lastPublishTime = now
+        var request = URLRequest(url: baseURL.appendingPathComponent("/api/heartbeat"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = payload
 
-        print("📤 Published heart rate: \(bpm) BPM")
-    }
-}
-
-extension PusherService: PusherDelegate {
-    func changedConnectionState(from old: ConnectionState, to new: ConnectionState) {
-        print("📡 Pusher connection: \(old.stringValue()) -> \(new.stringValue())")
-        onConnectionStateChange?(new)
-    }
-
-    func subscribedToChannel(name: String) {
-        print("✓ Subscribed to channel: \(name)")
-    }
-
-    func failedToSubscribeToChannel(name: String, response: URLResponse?, data: String?, error: NSError?) {
-        print("⚠️ Failed to subscribe to channel \(name): \(error?.localizedDescription ?? "unknown error")")
-    }
-
-    func debugLog(message: String) {
-        print("🔍 Pusher debug: \(message)")
+        onConnectionStateChange?(.sending)
+        let task = session.dataTask(with: request) { [weak self] _, response, error in
+            guard let self = self else { return }
+            if let error = error {
+                print("⚠️ Upload failed: \(error.localizedDescription)")
+                self.onConnectionStateChange?(.error)
+                return
+            }
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if (200..<300).contains(status) {
+                print("📤 Published heart rate: \(bpm) BPM")
+                self.onConnectionStateChange?(.ok)
+            } else {
+                print("⚠️ Upload HTTP \(status)")
+                self.onConnectionStateChange?(.error)
+            }
+        }
+        task.resume()
     }
 }
