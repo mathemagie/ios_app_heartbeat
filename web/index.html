@@ -92,9 +92,12 @@
 
     .hud .meta {
       font-size: 12px;
-      opacity: 0.55;
+      color: rgba(255, 255, 255, 0.5);
       margin-top: 8px;
     }
+
+    /* Law 10: the source is identity — let it read above the timestamp. */
+    .hud .meta .src { color: rgba(255, 255, 255, 0.92); font-weight: 600; }
 
     /* Connection dot, top-right. Law 1: recedes once connected. */
     .status {
@@ -328,6 +331,36 @@
       opacity: 0.55;
       text-align: center;
     }
+
+    /* Law 1 (REDUCE) + Law 10: one line-art icon language replaces the
+       mixed emoji. Buttons inherit their colour; flow glyphs take the
+       nebula's cyan so the "space" theme reads (Law 6/7). */
+    .icon-svg {
+      width: 16px;
+      height: 16px;
+      display: block;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .sound-btn .wave, .sound-btn .slash { transition: opacity 0.3s ease; }
+    .sound-btn:not(.on) .wave { opacity: 0; }   /* muted: no sound waves   */
+    .sound-btn.on .slash { opacity: 0; }        /* on: drop the mute slash */
+
+    .flow .icon { width: 22px; }
+    .flow .icon svg {
+      width: 18px;
+      height: 18px;
+      display: block;
+      fill: none;
+      stroke: #8fd3e8;
+      stroke-width: 1.7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
   </style>
 </head>
 <body>
@@ -349,7 +382,13 @@
     <div class="meta" id="meta">Waiting for a heartbeat…</div>
   </div>
 
-  <button class="sound-btn" id="sound-btn" aria-label="Toggle heartbeat sound" aria-pressed="false">🔇</button>
+  <button class="sound-btn" id="sound-btn" aria-label="Toggle heartbeat sound" aria-pressed="false">
+    <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 9v6h4l5 4V5L8 9H4z"/>
+      <path class="wave" d="M16.5 8.5a4.5 4.5 0 0 1 0 7"/>
+      <line class="slash" x1="3" y1="21" x2="21" y2="3"/>
+    </svg>
+  </button>
 
   <button class="help-btn" id="help-btn" aria-label="About this page" aria-haspopup="dialog">?</button>
 
@@ -360,11 +399,11 @@
 
       <h2>How the heartbeat travels</h2>
       <ul class="flow">
-        <li><span class="icon">❤️</span><span><span class="step">AirPods Pro / Apple Watch</span> <span class="note">— in‑ear PPG or wrist sensor reads BPM</span></span></li>
-        <li><span class="icon">📲</span><span><span class="step">HealthKit → iOS app</span> <span class="note">— samples observed and forwarded</span></span></li>
-        <li><span class="icon">☁️</span><span><span class="step">Vercel function</span> <span class="note">— validates 20–300 BPM, holds the secret</span></span></li>
-        <li><span class="icon">📡</span><span><span class="step">Pusher channel</span> <span class="note">— public real‑time stream</span></span></li>
-        <li><span class="icon">🌌</span><span><span class="step">This browser</span> <span class="note">— sets the pulse period to 60 ÷ BPM</span></span></li>
+        <li><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2 4 4 0 0 1 7 2c0 5.5-7 10-7 10z"/></svg></span><span><span class="step">AirPods Pro / Apple Watch</span> <span class="note">— in‑ear PPG or wrist sensor reads BPM</span></span></li>
+        <li><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/></svg></span><span><span class="step">HealthKit → iOS app</span> <span class="note">— samples observed and forwarded</span></span></li>
+        <li><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 18a4 4 0 0 1 .8-7.9 5 5 0 0 1 9.7-1.1A3.5 3.5 0 0 1 17 18H6.5z"/></svg></span><span><span class="step">Vercel function</span> <span class="note">— validates 20–300 BPM, holds the secret</span></span></li>
+        <li><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9a9 9 0 0 1 14 0"/><path d="M8 12a5 5 0 0 1 8 0"/><circle cx="12" cy="16" r="1"/></svg></span><span><span class="step">Pusher channel</span> <span class="note">— public real‑time stream</span></span></li>
+        <li><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10z"/></svg></span><span><span class="step">This browser</span> <span class="note">— sets the pulse period to 60 ÷ BPM</span></span></li>
       </ul>
 
       <h2>Keys</h2>
@@ -478,7 +517,6 @@
       } else {
         clearTimeout(beatTimer);
       }
-      soundBtn.textContent = on ? "🔊" : "🔇";
       soundBtn.classList.toggle("on", on);
       soundBtn.setAttribute("aria-pressed", String(on));
     }
@@ -512,7 +550,10 @@
     });
 
     // Law 4: let the intro mark recede after it has been read.
-    setTimeout(() => mark.classList.add("recede"), 6000);
+    // Law 3 (TIME): returning visitors already know it — recede quickly.
+    const seenIntro = localStorage.getItem("nebulaSeenIntro");
+    setTimeout(() => mark.classList.add("recede"), seenIntro ? 1500 : 6000);
+    localStorage.setItem("nebulaSeenIntro", "1");
 
     // Publishable Pusher credentials (safe to expose — the SECRET is never here,
     // it lives only in the Vercel serverless function). Used as a fallback when
@@ -555,7 +596,9 @@
         bpmEl.textContent = bpm;
         bpmEl.classList.remove("idle");
         const t = new Date(data.timestamp || Date.now()).toLocaleTimeString();
-        metaEl.textContent = `${data.source || "unknown"} • ${t}`;
+        const src = data.source || "unknown";
+        metaEl.innerHTML = `<span class="src"></span> • ${t}`;
+        metaEl.querySelector(".src").textContent = src; // textContent = no HTML injection
       });
     });
   </script>
