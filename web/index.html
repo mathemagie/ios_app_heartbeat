@@ -169,36 +169,12 @@
       100% { filter: brightness(var(--b-100)) saturate(var(--s-100)) hue-rotate(var(--h-100)); transform: scale(var(--c-100)); }
     }
 
-    /* A quiet "?" affordance, bottom-right. Law 4: it explains the rest. */
-    .help-btn {
+    /* Two quiet corner affordances (Law 4). The "?" explains the page,
+       bottom-right; the speaker toggles sound, bottom-left. They share one
+       look — only their corner and a couple of glyph details differ. */
+    .corner-btn {
       position: fixed;
       bottom: calc(18px + env(safe-area-inset-bottom));
-      right: calc(18px + env(safe-area-inset-right));
-      width: 30px;
-      height: 30px;
-      border-radius: 50%;
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      background: rgba(255, 255, 255, 0.04);
-      color: rgba(255, 255, 255, 0.7);
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      z-index: 20;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      transition: opacity 0.4s ease, background 0.3s ease, border-color 0.3s ease;
-    }
-
-    .help-btn:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.45); }
-
-    /* Sound toggle, mirroring the help "?" on the opposite corner. */
-    .sound-btn {
-      position: fixed;
-      bottom: calc(18px + env(safe-area-inset-bottom));
-      left: calc(18px + env(safe-area-inset-left));
       width: 30px;
       height: 30px;
       border-radius: 50%;
@@ -214,10 +190,13 @@
       justify-content: center;
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
-      transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+      transition: opacity 0.4s ease, background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
     }
 
-    .sound-btn:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.45); }
+    .corner-btn:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.45); }
+
+    .help-btn { right: calc(18px + env(safe-area-inset-right)); font-weight: 600; }
+    .sound-btn { left: calc(18px + env(safe-area-inset-left)); }
     /* When sound is on, the icon glows the same green as the connection dot. */
     .sound-btn.on { color: #34c759; border-color: rgba(52, 199, 89, 0.55); box-shadow: 0 0 10px rgba(52, 199, 89, 0.4); }
 
@@ -382,7 +361,7 @@
     <div class="meta" id="meta">Waiting for a heartbeat…</div>
   </div>
 
-  <button class="sound-btn" id="sound-btn" aria-label="Toggle heartbeat sound" aria-pressed="false">
+  <button class="corner-btn sound-btn" id="sound-btn" aria-label="Toggle heartbeat sound" aria-pressed="false">
     <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true">
       <path d="M4 9v6h4l5 4V5L8 9H4z"/>
       <path class="wave" d="M16.5 8.5a4.5 4.5 0 0 1 0 7"/>
@@ -390,7 +369,7 @@
     </svg>
   </button>
 
-  <button class="help-btn" id="help-btn" aria-label="About this page" aria-haspopup="dialog">?</button>
+  <button class="corner-btn help-btn" id="help-btn" aria-label="About this page" aria-haspopup="dialog">?</button>
 
   <div class="help-overlay" id="help-overlay" role="dialog" aria-modal="true" aria-label="About Heart Nebula">
     <div class="help-card">
@@ -512,7 +491,7 @@
       soundOn = on;
       if (on) {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        audioCtx.resume();        // required after the unlocking gesture
+        audioCtx.resume().catch(() => {}); // required after the unlocking gesture
         scheduleBeats();
       } else {
         clearTimeout(beatTimer);
@@ -531,15 +510,16 @@
     helpBtn.addEventListener("click", () => toggleHelp(true));
     helpOverlay.addEventListener("click", () => toggleHelp(false));
 
-    // Keyboard: "f" fullscreen, "?" help, "Esc" close.
+    // Keyboard: "f" fullscreen, "m" sound, "h"/"?" help, "Esc" close.
     document.addEventListener("keydown", (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "f" || e.key === "F") {
-        if (document.fullscreenElement) {
-          document.exitFullscreen();
-        } else {
-          document.documentElement.requestFullscreen();
-        }
+        // requestFullscreen/exitFullscreen reject when fullscreen is
+        // disallowed (iframe, permissions-policy); swallow it.
+        const p = document.fullscreenElement
+          ? document.exitFullscreen()
+          : document.documentElement.requestFullscreen();
+        if (p && p.catch) p.catch(() => {});
       } else if (e.key === "m" || e.key === "M") {
         setSound(!soundOn);
       } else if (e.key === "h" || e.key === "H" || e.key === "?") {
@@ -551,9 +531,14 @@
 
     // Law 4: let the intro mark recede after it has been read.
     // Law 3 (TIME): returning visitors already know it — recede quickly.
-    const seenIntro = localStorage.getItem("nebulaSeenIntro");
+    // Storage is wrapped: private/blocked-storage modes throw, and an
+    // unguarded throw here would abort the rest of the script (incl. Pusher).
+    let seenIntro = false;
+    try {
+      seenIntro = localStorage.getItem("nebulaSeenIntro") === "1";
+      if (!seenIntro) localStorage.setItem("nebulaSeenIntro", "1");
+    } catch (e) { /* storage unavailable — fall back to the full intro */ }
     setTimeout(() => mark.classList.add("recede"), seenIntro ? 1500 : 6000);
-    localStorage.setItem("nebulaSeenIntro", "1");
 
     // Publishable Pusher credentials (safe to expose — the SECRET is never here,
     // it lives only in the Vercel serverless function). Used as a fallback when
