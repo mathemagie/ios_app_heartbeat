@@ -191,6 +191,33 @@
 
     .help-btn:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.45); }
 
+    /* Sound toggle, mirroring the help "?" on the opposite corner. */
+    .sound-btn {
+      position: fixed;
+      bottom: calc(18px + env(safe-area-inset-bottom));
+      left: calc(18px + env(safe-area-inset-left));
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0.04);
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 14px;
+      line-height: 1;
+      cursor: pointer;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+    }
+
+    .sound-btn:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.45); }
+    /* When sound is on, the icon glows the same green as the connection dot. */
+    .sound-btn.on { color: #34c759; border-color: rgba(52, 199, 89, 0.55); box-shadow: 0 0 10px rgba(52, 199, 89, 0.4); }
+
     /* The help overlay. Hidden by default; fades in over the nebula. */
     .help-overlay {
       position: fixed;
@@ -322,6 +349,8 @@
     <div class="meta" id="meta">Waiting for a heartbeat…</div>
   </div>
 
+  <button class="sound-btn" id="sound-btn" aria-label="Toggle heartbeat sound" aria-pressed="false">🔇</button>
+
   <button class="help-btn" id="help-btn" aria-label="About this page" aria-haspopup="dialog">?</button>
 
   <div class="help-overlay" id="help-overlay" role="dialog" aria-modal="true" aria-label="About Heart Nebula">
@@ -341,6 +370,7 @@
       <h2>Keys</h2>
       <ul class="keys">
         <li><kbd>F</kbd> <span>Toggle fullscreen</span></li>
+        <li><kbd>M</kbd> <span>Toggle heartbeat sound</span></li>
         <li><kbd>H</kbd> <span>Open this help</span></li>
         <li><kbd>Esc</kbd> <span>Close</span></li>
       </ul>
@@ -384,14 +414,76 @@
 
     // Map a heart rate to one breathing cycle: one beat per cycle.
     // The nebula AND the BPM number share the same period, so they beat as one.
+    let beatBpm = 60; // latest clamped BPM, shared by the visuals and the sound
+
     function setHeartRate(bpm) {
-      const clamped = Math.max(30, Math.min(220, bpm));
-      const period = (60 / clamped).toFixed(3) + "s";
+      beatBpm = Math.max(30, Math.min(220, bpm));
+      const period = (60 / beatBpm).toFixed(3) + "s";
       nebula.style.animationDuration = period;
       bpmEl.style.animationDuration = period;
     }
 
     buildPulseCurve();
+
+    // ── Heartbeat sound ───────────────────────────────────────────────────
+    // A synthesized two-thump "lub-dub" via the Web Audio API — no audio
+    // files. It beats at the same 60/BPM period as the nebula. Off by
+    // default; browsers require a user gesture before audio can start.
+    let audioCtx = null;
+    let soundOn = false;
+    let beatTimer = null;
+
+    // One low sine "thump" with a fast attack and exponential decay.
+    function thump(at, freq, peak, dur) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "sine";
+      // A short downward pitch glide gives the thump its fleshy character.
+      osc.frequency.setValueAtTime(freq * 1.7, at);
+      osc.frequency.exponentialRampToValueAtTime(freq, at + 0.06);
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(peak, at + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(at);
+      osc.stop(at + dur + 0.02);
+    }
+
+    // Play one lub-dub: a strong systolic "lub", then a softer "dub". Their
+    // spacing tracks the nebula's keyframes (lub ~14%, dub ~34% of a cycle).
+    function playBeat() {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime;
+      const period = 60 / beatBpm;
+      thump(now, 52, 0.9, 0.17);                  // lub
+      thump(now + 0.20 * period, 62, 0.5, 0.13);  // dub
+    }
+
+    // Re-arm at the current period each beat, so tempo follows BPM live.
+    function scheduleBeats() {
+      clearTimeout(beatTimer);
+      if (!soundOn) return;
+      playBeat();
+      beatTimer = setTimeout(scheduleBeats, (60 / beatBpm) * 1000);
+    }
+
+    const soundBtn = document.getElementById("sound-btn");
+
+    function setSound(on) {
+      soundOn = on;
+      if (on) {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        audioCtx.resume();        // required after the unlocking gesture
+        scheduleBeats();
+      } else {
+        clearTimeout(beatTimer);
+      }
+      soundBtn.textContent = on ? "🔊" : "🔇";
+      soundBtn.classList.toggle("on", on);
+      soundBtn.setAttribute("aria-pressed", String(on));
+    }
+
+    soundBtn.addEventListener("click", () => setSound(!soundOn));
 
     // Help overlay: "?" opens, "Esc" / tap closes.
     const helpOverlay = document.getElementById("help-overlay");
@@ -410,6 +502,8 @@
         } else {
           document.documentElement.requestFullscreen();
         }
+      } else if (e.key === "m" || e.key === "M") {
+        setSound(!soundOn);
       } else if (e.key === "h" || e.key === "H" || e.key === "?") {
         toggleHelp(!helpOverlay.classList.contains("open"));
       } else if (e.key === "Escape") {
@@ -454,6 +548,7 @@
       });
 
       channel.bind("heartrate-update", (data) => {
+        console.log("[heartrate-update]", data);
         const bpm = Number(data.bpm);
         if (!Number.isFinite(bpm)) return;
         setHeartRate(bpm);
