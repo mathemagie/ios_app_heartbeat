@@ -215,8 +215,10 @@
        sits beside the sound button, then recedes — shown once, never nags. */
     .sound-hint {
       position: fixed;
-      bottom: calc(22px + env(safe-area-inset-bottom));
-      left: calc(58px + env(safe-area-inset-left));
+      /* Sit ABOVE the sound button, not beside it, so it never collides
+         with the centered BPM readout on narrow (mobile) screens. */
+      bottom: calc(58px + env(safe-area-inset-bottom));
+      left: calc(18px + env(safe-area-inset-left));
       z-index: 20;
       color: rgba(255, 255, 255, 0.85);
       font-size: 12px;
@@ -225,11 +227,11 @@
       pointer-events: none;
       text-shadow: 0 2px 18px rgba(0, 0, 0, 0.85);
       opacity: 0;
-      transform: translateX(-6px);
+      transform: translateY(6px);
       transition: opacity 0.6s ease, transform 0.6s ease;
     }
 
-    .sound-hint.show { opacity: 1; transform: translateX(0); }
+    .sound-hint.show { opacity: 1; transform: translateY(0); }
     /* When sound is on, the icon glows the same green as the connection dot. */
     .sound-btn.on { color: #34c759; border-color: rgba(52, 199, 89, 0.55); box-shadow: 0 0 10px rgba(52, 199, 89, 0.4); }
 
@@ -373,6 +375,21 @@
       stroke-linecap: round;
       stroke-linejoin: round;
     }
+
+    /* Touch devices: comfortable 44px tap targets (Apple HIG), and hide the
+       keyboard-only shortcut list since phones have no physical keyboard. */
+    @media (pointer: coarse) {
+      .corner-btn { width: 44px; height: 44px; font-size: 17px; }
+      .corner-btn .icon-svg { width: 20px; height: 20px; }
+      .sound-hint { bottom: calc(72px + env(safe-area-inset-bottom)); }
+      .keys-section { display: none; }
+    }
+
+    /* Smaller phones: keep the big BPM number from crowding the edges. */
+    @media (max-width: 380px) {
+      .hud .bpm { font-size: 54px; }
+      .sound-hint { font-size: 11px; }
+    }
   </style>
 </head>
 <body>
@@ -420,15 +437,17 @@
         <li><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10z"/></svg></span><span><span class="step">This browser</span> <span class="note">— sets the pulse period to 60 ÷ BPM</span></span></li>
       </ul>
 
-      <h2>Keys</h2>
-      <ul class="keys">
-        <li><kbd>F</kbd> <span>Toggle fullscreen</span></li>
-        <li><kbd>M</kbd> <span>Toggle heartbeat sound</span></li>
-        <li><kbd>H</kbd> <span>Open this help</span></li>
-        <li><kbd>Esc</kbd> <span>Close</span></li>
-      </ul>
+      <div class="keys-section">
+        <h2>Keys</h2>
+        <ul class="keys">
+          <li><kbd>F</kbd> <span>Toggle fullscreen</span></li>
+          <li><kbd>M</kbd> <span>Toggle heartbeat sound</span></li>
+          <li><kbd>H</kbd> <span>Open this help</span></li>
+          <li><kbd>Esc</kbd> <span>Close</span></li>
+        </ul>
+      </div>
 
-      <div class="help-hint">tap anywhere or press Esc to close</div>
+      <div class="help-hint">tap anywhere to close</div>
     </div>
   </div>
 
