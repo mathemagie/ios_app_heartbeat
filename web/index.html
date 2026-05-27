@@ -147,13 +147,39 @@
       max-width: 62vw;
       text-shadow: 0 2px 18px rgba(0, 0, 0, 0.8);
       transition: opacity 1.5s ease;
+      /* The mark is also the way in to the explainer (Law 2: one element,
+         two jobs) — so it's interactive, not just a label. */
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
     }
+
+    /* Invite interaction: hovering (or focusing) brings the receded mark back. */
+    .mark:hover, .mark:focus-visible { opacity: 1; outline: none; }
 
     .mark .title {
       font-size: 13px;
       font-weight: 700;
       letter-spacing: 0.5px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
+
+    /* A quiet "?" that marks the title as the way to learn more. */
+    .mark .cue {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      font-size: 9px;
+      font-weight: 600;
+      opacity: 0.75;
+    }
+
+    .mark:hover .cue, .mark:focus-visible .cue { opacity: 1; border-color: rgba(255, 255, 255, 0.75); }
 
     .mark .sub {
       font-size: 11px;
@@ -208,7 +234,6 @@
 
     .corner-btn:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.45); }
 
-    .help-btn { right: calc(18px + env(safe-area-inset-right)); font-weight: 600; }
     .sound-btn { left: calc(18px + env(safe-area-inset-left)); }
 
     /* Law 4 (LEARN): a one-time nudge that the heartbeat can be heard. It
@@ -395,8 +420,8 @@
 <body>
   <div class="nebula" id="nebula"></div>
 
-  <div class="mark" id="mark">
-    <div class="title">Heart Nebula</div>
+  <div class="mark" id="mark" role="button" tabindex="0" aria-haspopup="dialog" aria-label="About Heart Nebula">
+    <div class="title">Heart Nebula <span class="cue" aria-hidden="true">?</span></div>
     <div class="sub">IC 1805 · beating at a live heart rate</div>
   </div>
 
@@ -420,8 +445,6 @@
   </button>
 
   <div class="sound-hint" id="sound-hint" aria-hidden="true">♪ écouter le battement</div>
-
-  <button class="corner-btn help-btn" id="help-btn" aria-label="About this page" aria-haspopup="dialog">?</button>
 
   <div class="help-overlay" id="help-overlay" role="dialog" aria-modal="true" aria-label="About Heart Nebula">
     <div class="help-card">
@@ -558,12 +581,15 @@
       }
     } catch (e) { /* storage blocked — simply skip the hint */ }
 
-    // Help overlay: "?" opens, "Esc" / tap closes.
+    // Help overlay: the top-left mark opens it (Law 2: the title is also
+    // the "what is this?" affordance); "Esc" / tap closes.
     const helpOverlay = document.getElementById("help-overlay");
-    const helpBtn = document.getElementById("help-btn");
     const toggleHelp = (open) => helpOverlay.classList.toggle("open", open);
 
-    helpBtn.addEventListener("click", () => toggleHelp(true));
+    mark.addEventListener("click", () => toggleHelp(true));
+    mark.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleHelp(true); }
+    });
     helpOverlay.addEventListener("click", () => toggleHelp(false));
 
     // Keyboard: "f" fullscreen, "m" sound, "h"/"?" help, "Esc" close.
