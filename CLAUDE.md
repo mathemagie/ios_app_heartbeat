@@ -13,8 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Web Client:**
 - Serve locally: `python3 -m http.server --directory web 8000`
 - Nebula page (default): `http://localhost:8000/index.html`
-- Monitor page: `http://localhost:8000/index2.html`
-- Production: deployed on Vercel; the web pages fetch the public Pusher key from `/api/config`.
+- Production: deployed on Vercel; the web page fetches the public Pusher key from `/api/config`.
 
 **Backend (Vercel serverless):**
 - Functions live in `api/` (`heartbeat.py`, `config.py`).
@@ -71,14 +70,13 @@ This is a real-time heart rate streaming system: heart rate is captured on iOS v
 │   2. new Pusher(key,{cluster}) → subscribe("heartrate-live")           │
 │   3. bind("heartrate-update", data => setHeartRate(data.bpm))          │
 │                                                                        │
-│   index.html → / (Nebula)        index2.html → /monitor (Monitor)      │
-│   period = 60/bpm sec drives     big BPM number + pulse, source +      │
-│   CSS @keyframes pulse           timestamp, tap to copy stream URL     │
-│   (lub ~14%, dub ~34%)                                                 │
+│   index.html → / (Nebula)                                             │
+│   period = 60/bpm sec drives the CSS @keyframes pulse                  │
+│   (lub ~14%, dub ~34%); a synthesized lub-dub sound can be toggled     │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-One line: `AirPods/Watch → HealthKit → iOS app → HTTPS POST → Vercel → Pusher → WebSocket → browser nebula/monitor`.
+One line: `AirPods/Watch → HealthKit → iOS app → HTTPS POST → Vercel → Pusher → WebSocket → browser nebula`.
 
 ### 1. iOS App (SwiftUI)
 - **HealthKitManager.swift**: Manages HealthKit authorization and observes heart rate samples using `HKObserverQuery` + `HKAnchoredObjectQuery` (anchored so only new samples are fetched). Supports background delivery for continuous monitoring. The heart rate source can be AirPods Pro 3 (in-ear PPG sensor) or an Apple Watch — both surface through HealthKit identically.
@@ -88,9 +86,9 @@ One line: `AirPods/Watch → HealthKit → iOS app → HTTPS POST → Vercel →
 - **ShareIdStore.swift**: Generates/persists an 8-char share ID in `UserDefaults`. NOTE: the current stream uses a hard-coded `shareId = "live"`; per-user share IDs are not yet wired into the publish path.
 
 ### 2. Web Client (Vanilla JS)
-- **web/index.html** → served at `/` (default): the **Nebula** visualization. Subscribes to Pusher and drives a breathing nebula animation. On each update it sets CSS `animation-duration = 60/bpm` seconds so the visuals beat at the real heart rate, using a two-peak lub-dub `@keyframes pulse` (systolic peak ~14% of cycle, diastolic ~34%) over brightness/saturation/hue/scale filters.
-- **web/index2.html** → served at `/monitor`: the **Monitor** page. Large BPM readout with pulse animation, source + timestamp, connection dot, and tap-to-copy stream URL.
-- Both pages fetch the public Pusher key/cluster from `/api/config` (with a hard-coded public-key fallback), then `subscribe("heartrate-live")` and `bind("heartrate-update", …)`. Clients never see the Pusher secret.
+- **web/index.html** → served at `/` (default): the **Nebula** visualization. Subscribes to Pusher and drives a breathing nebula animation. On each update it sets CSS `animation-duration = 60/bpm` seconds so the visuals beat at the real heart rate, using a two-peak lub-dub `@keyframes pulse` (systolic peak ~14% of cycle, diastolic ~34%) over brightness/saturation/hue/scale filters. A synthesized lub-dub heartbeat sound (Web Audio) can be toggled on.
+- **web/nebula.js**: pure, DOM-free helpers (BPM clamping, period math, the pulse curve, beat timing, validation) shared by the page and the unit tests. UMD: `window.Nebula` in the browser, `require()` in Node.
+- The page fetches the public Pusher key/cluster from `/api/config` (with a hard-coded public-key fallback), then `subscribe("heartrate-live")` and `bind("heartrate-update", …)`. Clients never see the Pusher secret.
 
 ### 3. Backend (Vercel Serverless, Python)
 - **api/heartbeat.py** (`POST /api/heartbeat`): validates `shareId` and `bpm` (20–300 range), then calls `pusher.trigger("heartrate-live", "heartrate-update", { bpm, timestamp, source, shareId })`.
@@ -130,7 +128,7 @@ api/
 
 web/
 ├── index.html                  # / — Nebula visualization (default)
-└── index2.html                 # /monitor — Monitor readout
+└── nebula.js                   # pure helpers shared by the page and tests
 ```
 
 ## Swift Code Patterns
@@ -154,7 +152,7 @@ web/
 **Web Client Testing:**
 1. Run the iOS app and start monitoring.
 2. Serve the web client: `python3 -m http.server --directory web 8000` (or use the Vercel deployment).
-3. Open `http://localhost:8000/index.html` (nebula) and/or `/index2.html` (monitor).
+3. Open `http://localhost:8000/index.html` (nebula).
 4. Verify BPM updates arrive in real time over the `heartrate-live` Pusher channel.
 
 ## Security & Configuration

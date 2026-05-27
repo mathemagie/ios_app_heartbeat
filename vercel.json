@@ -2,7 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     { "source": "/", "destination": "/web/index.html" },
-    { "source": "/monitor", "destination": "/web/index2.html" },
     { "source": "/nebu.jpg", "destination": "/web/nebu.jpg" },
     { "source": "/nebula.js", "destination": "/web/nebula.js" }
   ]

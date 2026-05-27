@@ -98,8 +98,7 @@ python3 -m http.server --directory web 8000
 ```
 
 Then open `http://localhost:8000/`. The page shows the live Heart Nebula, which
-breathes in time with the streamed BPM. (The old BPM monitor is at
-`http://localhost:8000/index2.html`.) BPM should update live within a second or two.
+breathes in time with the streamed BPM. BPM should update live within a second or two.
 
 > See `PUSHER_SETUP.md` for the full walkthrough, architecture details, and
 > troubleshooting.

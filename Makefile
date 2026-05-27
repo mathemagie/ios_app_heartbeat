@@ -17,9 +17,8 @@ help: ## Show this help
 
 # --- Web client -----------------------------------------------------------
 .PHONY: web
-web: ## Serve the web client locally (nebula at /, monitor at /index2.html)
-	@echo "Nebula:  http://localhost:$(WEB_PORT)/index.html"
-	@echo "Monitor: http://localhost:$(WEB_PORT)/index2.html"
+web: ## Serve the web client locally (nebula at /)
+	@echo "Nebula: http://localhost:$(WEB_PORT)/index.html"
 	python3 -m http.server --directory $(WEB_DIR) $(WEB_PORT)
 
 .PHONY: web-open
