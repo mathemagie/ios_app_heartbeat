@@ -99,6 +99,14 @@
     /* Law 10: the source is identity — let it read above the timestamp. */
     .hud .meta .src { color: rgba(255, 255, 255, 0.92); font-weight: 600; }
 
+    /* The pre-connection message reads brighter and larger than the quiet
+       source/timestamp line it will be replaced by. */
+    .hud .meta.waiting {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.82);
+      letter-spacing: 0.2px;
+    }
+
     /* Connection dot, top-right. Law 1: recedes once connected. */
     .status {
       position: fixed;
@@ -358,7 +366,7 @@
   <div class="hud">
     <div class="bpm idle" id="bpm">--</div>
     <div class="unit">BPM</div>
-    <div class="meta" id="meta">Waiting for a heartbeat…</div>
+    <div class="meta waiting" id="meta">Battement par défaut · en attente de celui d'Aurélien…</div>
   </div>
 
   <button class="corner-btn sound-btn" id="sound-btn" aria-label="Toggle heartbeat sound" aria-pressed="false">
@@ -580,6 +588,7 @@
         setHeartRate(bpm);
         bpmEl.textContent = bpm;
         bpmEl.classList.remove("idle");
+        metaEl.classList.remove("waiting"); // switch to the quiet source/time line
         const t = new Date(data.timestamp || Date.now()).toLocaleTimeString();
         const src = data.source || "unknown";
         metaEl.innerHTML = `<span class="src"></span> • ${t}`;
