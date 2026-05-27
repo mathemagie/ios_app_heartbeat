@@ -56,17 +56,26 @@ struct ContentView: View {
                 }
                 .buttonStyle(.plain)
 
-                Text(didCopyShareId ? "Copied!" : "Tap to copy link")
-                    .font(.caption2)
-                    .foregroundStyle(didCopyShareId ? .green : .secondary)
-
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(pusherStatusColor)
-                        .frame(width: 6, height: 6)
-                    Text("Stream: \(pusherStatus)")
+                if didCopyShareId {
+                    Text("Copied!")
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.green)
+                }
+
+                // One status line for the whole "is my heart reaching the web?"
+                // question — replaces the two competing connection vocabularies.
+                HStack(spacing: 6) {
+                    if streamStatus.connecting {
+                        ProgressView()
+                            .controlSize(.mini)
+                    } else {
+                        Circle()
+                            .fill(streamStatus.color)
+                            .frame(width: 6, height: 6)
+                    }
+                    Text(streamStatus.label)
+                        .font(.caption2)
+                        .foregroundStyle(streamStatus.color)
                 }
             }
             .padding(.horizontal)
@@ -113,16 +122,6 @@ struct ContentView: View {
                 }
             }
             .frame(minHeight: 200)
-
-            // Status indicator
-            HStack {
-                Circle()
-                    .fill(statusColor)
-                    .frame(width: 10, height: 10)
-                Text(connectionStatus)
-                    .font(.subheadline)
-                    .foregroundStyle(statusColor)
-            }
 
             // Error display
             if let error = errorMessage {
@@ -186,10 +185,13 @@ struct ContentView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
 
-            Text("Requires HealthKit permission for heart rate data from Apple Watch or other devices")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+            // Only instructive while idle; once BPM flows it's just noise.
+            if currentBPM == nil {
+                Text("Requires HealthKit permission for heart rate data from Apple Watch or other devices")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
 
             #if DEBUG
             // Simulator helper: feeds random BPM into the UI + Pusher,
@@ -253,29 +255,27 @@ struct ContentView: View {
         return formatter.string(from: date)
     }
 
-    private var statusColor: Color {
-        switch connectionStatus {
-        case "Monitoring", "Connected":
-            return .green
-        case "Connecting...":
-            return .orange
-        case "Failed", "Stopped":
-            return .red
-        default:
-            return .gray
+    /// The single source of truth for "is my heart reaching the web?".
+    /// Folds the iOS connection state and the raw Pusher upload state into
+    /// one human-readable line, translating engineer-speak (ok/sending/idle)
+    /// into language the viewer cares about.
+    private var streamStatus: (label: String, color: Color, connecting: Bool) {
+        if connectionStatus == "Failed" {
+            return ("Couldn't connect", .red, false)
         }
-    }
-
-    private var pusherStatusColor: Color {
+        // Idle and not mid-connect.
+        if !isStreaming && connectionStatus != "Connecting..." {
+            return ("Not streaming", .gray, false)
+        }
         switch pusherStatus {
-        case "ok":
-            return .green
-        case "sending":
-            return .orange
-        case "idle", "Disconnected":
-            return .gray
-        default:
-            return .red
+        case UploadState.ok.rawValue, UploadState.sending.rawValue:
+            // An in-flight upload means we're live — don't flicker to
+            // "Connecting…" on every 2s publish round-trip.
+            return ("Live on the web", .green, false)
+        case UploadState.error.rawValue:
+            return ("Reconnecting…", .orange, true)
+        default: // idle / Disconnected — before the first send lands
+            return ("Connecting…", .orange, true)
         }
     }
 }
