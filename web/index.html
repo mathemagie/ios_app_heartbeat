@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Heart Nebula — Live</title>
-  <meta name="description" content="Un cœur en direct, transformé en nébuleuse (IC 1805) qui respire à son rythme. Image et son synchronisés sur chaque battement.">
+  <meta name="description" content="A live heart, breathed into a nebula (IC 1805) that pulses at its rhythm. Image and sound synced to every beat.">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Heart Nebula">
@@ -12,21 +12,21 @@
   <!-- Open Graph (Facebook, LinkedIn, iMessage, …) -->
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Heart Nebula">
-  <meta property="og:title" content="Heart Nebula — un cœur en direct dans les étoiles">
-  <meta property="og:description" content="Un battement de cœur capté en direct, transformé en nébuleuse (IC 1805) qui respire à son rythme. Image et son synchronisés sur chaque pulsation.">
+  <meta property="og:title" content="Heart Nebula — a live heart among the stars">
+  <meta property="og:description" content="A heartbeat captured live, breathed into a nebula (IC 1805) that pulses at its rhythm. Image and sound synced to every beat.">
   <meta property="og:url" content="https://nebulaheart.vercel.app/">
   <meta property="og:image" content="https://nebulaheart.vercel.app/nebu.jpg">
   <meta property="og:image:width" content="2560">
   <meta property="og:image:height" content="1671">
-  <meta property="og:image:alt" content="La nébuleuse du Cœur, IC 1805.">
-  <meta property="og:locale" content="fr_FR">
+  <meta property="og:image:alt" content="The Heart Nebula, IC 1805.">
+  <meta property="og:locale" content="en_US">
 
   <!-- Twitter / X card -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Heart Nebula — un cœur en direct dans les étoiles">
-  <meta name="twitter:description" content="Un battement de cœur capté en direct, transformé en nébuleuse qui respire à son rythme. Image et son synchronisés sur chaque pulsation.">
+  <meta name="twitter:title" content="Heart Nebula — a live heart among the stars">
+  <meta name="twitter:description" content="A heartbeat captured live, breathed into a nebula that pulses at its rhythm. Image and sound synced to every beat.">
   <meta name="twitter:image" content="https://nebulaheart.vercel.app/nebu.jpg">
-  <meta name="twitter:image:alt" content="La nébuleuse du Cœur, IC 1805.">
+  <meta name="twitter:image:alt" content="The Heart Nebula, IC 1805.">
 
   <link rel="canonical" href="https://nebulaheart.vercel.app/">
   <script src="https://js.pusher.com/8.4.0-rc2/pusher.min.js"></script>
@@ -455,7 +455,7 @@
   <div class="hud">
     <div class="bpm idle" id="bpm">--</div>
     <div class="unit">BPM</div>
-    <div class="meta waiting" id="meta">Battement par défaut · en attente de celui d'Aurélien…</div>
+    <div class="meta waiting" id="meta">Default beat · waiting for Aurélien's…</div>
   </div>
 
   <button class="corner-btn sound-btn" id="sound-btn" aria-label="Toggle heartbeat sound" aria-pressed="false">
@@ -466,7 +466,7 @@
     </svg>
   </button>
 
-  <div class="sound-hint" id="sound-hint" aria-hidden="true">♪ écouter le battement</div>
+  <div class="sound-hint" id="sound-hint" aria-hidden="true">♪ hear the heartbeat</div>
 
   <div class="help-overlay" id="help-overlay" role="dialog" aria-modal="true" aria-label="About Heart Nebula">
     <div class="help-card">
@@ -662,9 +662,17 @@
       const pusher = new Pusher(config.key, { cluster: config.cluster });
       const channel = pusher.subscribe(`heartrate-${SHARE_ID}`);
 
+      // Law 6: speak to the viewer, not in Pusher's vocabulary. The dot
+      // already carries the binary signal; the word should reassure.
+      const STATUS_LABEL = {
+        connected: "live",
+        connecting: "connecting…",
+        initialized: "connecting…",
+      };
+
       let hideTimer;
       pusher.connection.bind("state_change", (s) => {
-        statusEl.textContent = s.current;
+        statusEl.textContent = STATUS_LABEL[s.current] || "reconnecting…";
         const connected = s.current === "connected";
         dotEl.classList.toggle("connected", connected);
         // Law 1 (Hide) + Law 6: once connected, let the status recede;
