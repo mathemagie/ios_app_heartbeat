@@ -43,6 +43,11 @@ ios-sim: ## Build, install & launch on the iOS Simulator (DEVICE="iPhone 16")
 ios-clean: ## Clean the iOS build
 	xcodebuild -scheme $(IOS_SCHEME) clean
 
+# --- Tests ----------------------------------------------------------------
+.PHONY: test
+test: ## Run the web app unit tests (Node built-in test runner)
+	node --test "test/**/*.test.js"
+
 # --- Backend / deploy -----------------------------------------------------
 .PHONY: install
 install: ## Install Node dependencies (Vercel CLI)

@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\""
+  },
   "dependencies": {
     "vercel": "^54.5.0"
   }

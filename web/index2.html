@@ -302,6 +302,7 @@
       }
     </style>
     <script src="https://js.pusher.com/8.4.0-rc2/pusher.min.js"></script>
+    <script src="nebula.js"></script>
     <script>
       // Single global stream — no per-user ID in the URL.
       const shareId = 'live'
@@ -356,7 +357,7 @@
           const timestamp = new Date(data.timestamp)
           const timeString = timestamp.toLocaleTimeString()
 
-          document.getElementById('meta').textContent = `${data.source} • ${timeString}`
+          document.getElementById('meta').textContent = Nebula.formatMeta(data.source, timeString)
         })
 
         // Handle subscription errors

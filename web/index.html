@@ -8,6 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Heart Nebula">
   <script src="https://js.pusher.com/8.4.0-rc2/pusher.min.js"></script>
+  <script src="nebula.js"></script>
   <style>
     body {
       margin: 0;
@@ -421,20 +422,12 @@
     // and softer "dub" peak, plus a faint baseline tremor during the rest.
     function buildPulseCurve() {
       const root = document.documentElement.style;
-      const intensity = 1.5, maxSat = 1.5, maxHue = 6, maxScale = 1.016;
-      const minBright = Math.max(0.6, intensity - 0.4), minSat = 0.9, minScale = 1.0;
-      const keyframes = [0, 6, 12, 18, 25, 33, 42, 50, 58, 67, 75, 83, 91, 100];
-      const lubCenter = 14, lubWidth = 9, dubCenter = 34, dubWidth = 11, dubAmp = 0.6;
-
-      keyframes.forEach(p => {
-        const lub = Math.exp(-Math.pow((p - lubCenter) / lubWidth, 2));
-        const dub = dubAmp * Math.exp(-Math.pow((p - dubCenter) / dubWidth, 2));
-        const baseline = 0.04 * (Math.sin((p / 100) * 2 * Math.PI * 1.7) + 1) / 2;
-        const f = Math.max(0, Math.min(1, lub + dub + baseline));
-        root.setProperty(`--b-${p}`, (minBright + (intensity - minBright) * f).toFixed(3));
-        root.setProperty(`--s-${p}`, (minSat + (maxSat - minSat) * f).toFixed(3));
-        root.setProperty(`--h-${p}`, (maxHue * f).toFixed(2) + "deg");
-        root.setProperty(`--c-${p}`, (minScale + (maxScale - minScale) * f).toFixed(5));
+      Nebula.PULSE_KEYFRAMES.forEach(p => {
+        const v = Nebula.pulseFilterValues(p);
+        root.setProperty(`--b-${p}`, v.brightness);
+        root.setProperty(`--s-${p}`, v.saturate);
+        root.setProperty(`--h-${p}`, v.hue);
+        root.setProperty(`--c-${p}`, v.scale);
       });
     }
 
@@ -443,8 +436,8 @@
     let beatBpm = 60; // latest clamped BPM, shared by the visuals and the sound
 
     function setHeartRate(bpm) {
-      beatBpm = Math.max(30, Math.min(220, bpm));
-      const period = (60 / beatBpm).toFixed(3) + "s";
+      beatBpm = Nebula.clampBpm(bpm);
+      const period = Nebula.bpmToPeriodCss(beatBpm);
       nebula.style.animationDuration = period;
       bpmEl.style.animationDuration = period;
     }
@@ -480,9 +473,8 @@
     function playBeat() {
       if (!audioCtx) return;
       const now = audioCtx.currentTime;
-      const period = 60 / beatBpm;
-      thump(now, 52, 0.9, 0.17);                  // lub
-      thump(now + 0.20 * period, 62, 0.5, 0.13);  // dub
+      thump(now, 52, 0.9, 0.17);                              // lub
+      thump(now + Nebula.dubDelaySeconds(beatBpm), 62, 0.5, 0.13); // dub
     }
 
     // Re-arm at the current period each beat, so tempo follows BPM live.
@@ -490,7 +482,7 @@
       clearTimeout(beatTimer);
       if (!soundOn) return;
       playBeat();
-      beatTimer = setTimeout(scheduleBeats, (60 / beatBpm) * 1000);
+      beatTimer = setTimeout(scheduleBeats, Nebula.bpmToPeriodSeconds(beatBpm) * 1000);
     }
 
     const soundBtn = document.getElementById("sound-btn");
@@ -584,7 +576,7 @@
       channel.bind("heartrate-update", (data) => {
         console.log("[heartrate-update]", data);
         const bpm = Number(data.bpm);
-        if (!Number.isFinite(bpm)) return;
+        if (!Nebula.isValidBpm(bpm)) return;
         setHeartRate(bpm);
         bpmEl.textContent = bpm;
         bpmEl.classList.remove("idle");
