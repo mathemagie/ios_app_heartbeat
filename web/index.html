@@ -91,6 +91,10 @@
       margin-top: 6px;
     }
 
+    /* Law 5: while waiting there's no real number, so the "BPM" unit under
+       the "--" placeholder is noise — hide it until a real beat arrives. */
+    .hud:has(.bpm.idle) .unit { opacity: 0; }
+
     .hud .meta {
       font-size: 12px;
       color: rgba(255, 255, 255, 0.5);
@@ -206,6 +210,26 @@
 
     .help-btn { right: calc(18px + env(safe-area-inset-right)); font-weight: 600; }
     .sound-btn { left: calc(18px + env(safe-area-inset-left)); }
+
+    /* Law 4 (LEARN): a one-time nudge that the heartbeat can be heard. It
+       sits beside the sound button, then recedes — shown once, never nags. */
+    .sound-hint {
+      position: fixed;
+      bottom: calc(22px + env(safe-area-inset-bottom));
+      left: calc(58px + env(safe-area-inset-left));
+      z-index: 20;
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 12px;
+      letter-spacing: 0.2px;
+      white-space: nowrap;
+      pointer-events: none;
+      text-shadow: 0 2px 18px rgba(0, 0, 0, 0.85);
+      opacity: 0;
+      transform: translateX(-6px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+
+    .sound-hint.show { opacity: 1; transform: translateX(0); }
     /* When sound is on, the icon glows the same green as the connection dot. */
     .sound-btn.on { color: #34c759; border-color: rgba(52, 199, 89, 0.55); box-shadow: 0 0 10px rgba(52, 199, 89, 0.4); }
 
@@ -378,6 +402,8 @@
     </svg>
   </button>
 
+  <div class="sound-hint" id="sound-hint" aria-hidden="true">♪ écouter le battement</div>
+
   <button class="corner-btn help-btn" id="help-btn" aria-label="About this page" aria-haspopup="dialog">?</button>
 
   <div class="help-overlay" id="help-overlay" role="dialog" aria-modal="true" aria-label="About Heart Nebula">
@@ -498,9 +524,20 @@
       }
       soundBtn.classList.toggle("on", on);
       soundBtn.setAttribute("aria-pressed", String(on));
+      soundHint.classList.remove("show"); // dismiss the nudge once acted on
     }
 
     soundBtn.addEventListener("click", () => setSound(!soundOn));
+
+    // Law 4 (LEARN): reveal the sound feature once, then recede and never nag.
+    const soundHint = document.getElementById("sound-hint");
+    try {
+      if (localStorage.getItem("nebulaSoundHintSeen") !== "1") {
+        setTimeout(() => soundHint.classList.add("show"), 2200);
+        setTimeout(() => soundHint.classList.remove("show"), 8000);
+        localStorage.setItem("nebulaSoundHintSeen", "1");
+      }
+    } catch (e) { /* storage blocked — simply skip the hint */ }
 
     // Help overlay: "?" opens, "Esc" / tap closes.
     const helpOverlay = document.getElementById("help-overlay");
