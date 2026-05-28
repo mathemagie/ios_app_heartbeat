@@ -19,6 +19,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Functions live in `api/` (`heartbeat.py`, `config.py`).
 - Pusher credentials are set as Vercel environment variables (`PUSHER_APP_ID`, `PUSHER_KEY`, `PUSHER_SECRET`, `PUSHER_CLUSTER`). The **secret never ships to clients**.
 
+**Deploy:**
+- `make deploy` — runs `npx vercel --prod` to push the current working tree to Vercel production. Requires the Vercel CLI (`make install` once) and an authenticated session (`npx vercel login`).
+- The project is **not** auto-deployed on `git push`. Each production release is a manual `make deploy`. To enable git-driven deploys, link the GitHub repo in Vercel → Project → Settings → Git.
+- `make dev` — runs the full stack locally (`npx vercel dev` on `DEV_PORT`, default 3000), including the `api/` functions. Use this to test `/api/heartbeat` and `/api/config` end-to-end before deploying.
+- Inspect recent deploys with `npx vercel ls`; check function logs with `npx vercel logs <deployment-url>`.
+
 ## Architecture Overview
 
 This is a real-time heart rate streaming system: heart rate is captured on iOS via HealthKit, POSTed to a Vercel serverless function, published to a public Pusher channel, and rendered live in the browser (a "nebula" visualization that beats in sync with the heart).
