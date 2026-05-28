@@ -6,6 +6,7 @@ IOS_SCHEME    := HeartBeatStream
 IOS_PROJECT   := ios/HeartBeatStream/HeartBeatStream/HeartBeatStream.xcodeproj
 WEB_DIR       := web
 WEB_PORT      ?= 8000
+DEV_PORT      ?= 3000
 
 .DEFAULT_GOAL := help
 
@@ -17,7 +18,13 @@ help: ## Show this help
 
 # --- Web client -----------------------------------------------------------
 .PHONY: web
-web: ## Serve the web client locally (nebula at /)
+web: ## Serve the web client locally (nebula at /); frees WEB_PORT if busy
+	@pid=$$(lsof -ti tcp:$(WEB_PORT) -sTCP:LISTEN); \
+	if [ -n "$$pid" ]; then \
+		echo "Port $(WEB_PORT) busy (pid $$pid) — killing"; \
+		kill $$pid 2>/dev/null; sleep 1; \
+		kill -0 $$pid 2>/dev/null && kill -9 $$pid 2>/dev/null || true; \
+	fi
 	@echo "Nebula: http://localhost:$(WEB_PORT)/index.html"
 	python3 -m http.server --directory $(WEB_DIR) $(WEB_PORT)
 
@@ -53,8 +60,14 @@ install: ## Install Node dependencies (Vercel CLI)
 	npm install
 
 .PHONY: dev
-dev: ## Run the full stack locally with Vercel (serverless + web)
-	npx vercel dev
+dev: ## Run the full stack locally with Vercel (serverless + web); frees DEV_PORT if busy
+	@pid=$$(lsof -ti tcp:$(DEV_PORT) -sTCP:LISTEN); \
+	if [ -n "$$pid" ]; then \
+		echo "Port $(DEV_PORT) busy (pid $$pid) — killing"; \
+		kill $$pid 2>/dev/null; sleep 1; \
+		kill -0 $$pid 2>/dev/null && kill -9 $$pid 2>/dev/null || true; \
+	fi
+	npx vercel dev --listen $(DEV_PORT)
 
 .PHONY: deploy
 deploy: ## Deploy to Vercel production
