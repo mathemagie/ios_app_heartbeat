@@ -1,20 +1,26 @@
 # Pusher Channels — Architecture Options & the Secret Problem
 
-This doc explains how heart-rate data flows through Pusher today, why the current
-setup is insecure, and the realistic ways to fix it. No code has been changed by
-this document — it's a decision aid.
+This doc captures the design decision behind the current architecture: why the
+Pusher secret was moved off the clients and onto a Vercel serverless backend.
+The repo now implements **Option B** below; the "previous setup" section is
+kept as historical context.
 
-## Current setup (insecure)
+> **Status: Option B is implemented.** iOS POSTs to `/api/heartbeat` on Vercel;
+> the function publishes to a **public** channel `heartrate-{shareId}` using
+> the Pusher REST API. The secret lives only in Vercel env vars. The web page
+> subscribes with the public key (fetched from `/api/config`) — no browser
+> HMAC, no `crypto.subtle`, no auth.
 
-- **iOS** publishes via a **client event**: `channel.trigger("client-heartrate-update", …)`
-  on the **private** channel `private-heartrate-{shareId}`
-  (`ios/.../PusherService.swift`).
-- **Web** subscribes to the same private channel and signs the auth in the browser
-  using HMAC-SHA256 (`web/index.html`).
-- The **Pusher secret is hardcoded in both clients** (`PusherService.swift` and
-  `index.html`).
+## Previous setup (insecure — no longer used)
 
-### Why this is a problem
+- **iOS** used to publish via a **client event**:
+  `channel.trigger("client-heartrate-update", …)` on the **private** channel
+  `private-heartrate-{shareId}` (via the PusherSwift SDK).
+- **Web** subscribed to the same private channel and signed the auth in the
+  browser using HMAC-SHA256.
+- The **Pusher secret was hardcoded in both clients**.
+
+### Why that was a problem
 1. **The secret is public.** Anyone who reads the iOS binary or views the web page
    source gets the secret and can forge auth for any channel, impersonate users,
    and call Pusher's server API. The secret is also now in git history → **rotate it.**
@@ -40,9 +46,9 @@ API** (using the secret on a server).
 
 | | Subscriber auth | Who publishes | Secret location | Web `crypto.subtle`? | Server needed? |
 |---|---|---|---|---|---|
-| **Current:** private + client events | needs auth (secret in client) | iOS directly | ❌ in clients (insecure) | ✅ required | No |
+| **Previous:** private + client events | needs auth (secret in client) | iOS directly | ❌ in clients (insecure) | ✅ required | No |
 | **A:** private + server auth endpoint | server signs auth | iOS directly (client events) | ✅ server only | ✅ still required | Yes (auth only) |
-| **B:** public channel + server publishes | none | **server** (iOS POSTs BPM to it) | ❌ not needed | ❌ not needed | Yes (auth + publish) |
+| **B (current):** public channel + server publishes | none | **server** (iOS POSTs BPM to it) | ✅ server only | ❌ not needed | Yes (auth + publish) |
 
 ## Option A — Private channel + server-side auth endpoint
 
@@ -58,9 +64,11 @@ small server endpoint that holds the secret.
   no longer does HMAC; that removes the crypto error too. But you must keep "client
   events" enabled and a private subscription working. Still need a deployed server.
 
-## Option B — Public channel + server publishes (recommended)
+## Option B — Public channel + server publishes (implemented)
 
-iOS stops publishing directly. Instead:
+This is what the repo does today. The Vercel function in `api/heartbeat.py` is
+the server; `api/config.py` exposes the public key to the web page. iOS no
+longer talks to Pusher directly. The flow:
 
 1. **iOS** sends each BPM to your server: `POST /heartbeat` with `{ shareId, bpm, … }`.
 2. **Server** uses the Pusher **REST API** (server SDK, secret server-side) to
@@ -73,20 +81,23 @@ iOS stops publishing directly. Instead:
 - **Cons:** iOS no longer talks to Pusher directly (it talks to your server); you must
   deploy and run a server.
 
-### Sketch of the server (Node example, illustrative)
-```js
-import Pusher from "pusher";
-const pusher = new Pusher({
-  appId: process.env.PUSHER_APP_ID,
-  key: process.env.PUSHER_KEY,
-  secret: process.env.PUSHER_SECRET, // server-only
-  cluster: "eu",
-});
-app.post("/heartbeat", (req, res) => {
-  const { shareId, bpm, timestamp, source } = req.body;
-  pusher.trigger(`heartrate-${shareId}`, "heartrate-update", { bpm, timestamp, source, shareId });
-  res.sendStatus(204);
-});
+### Actual server (Vercel Python — see `api/heartbeat.py`)
+```python
+import os, pusher
+client = pusher.Pusher(
+    app_id=os.environ["PUSHER_APP_ID"],
+    key=os.environ["PUSHER_KEY"],
+    secret=os.environ["PUSHER_SECRET"],   # server-only
+    cluster=os.environ["PUSHER_CLUSTER"],
+    ssl=True,
+)
+# In the POST handler, after validating shareId (^[A-Za-z0-9]{4,32}$)
+# and bpm (20–300):
+client.trigger(
+    f"heartrate-{share_id}",
+    "heartrate-update",
+    {"bpm": bpm, "timestamp": timestamp, "source": source, "shareId": share_id},
+)
 ```
 Web side becomes just:
 ```js
@@ -95,18 +106,21 @@ const channel = pusher.subscribe(`heartrate-${shareId}`);  // public, no auth
 channel.bind("heartrate-update", (data) => { /* update UI */ });
 ```
 
-## Immediate action regardless of option
+## One-time action when migrating from the old setup
 
-- **Rotate the Pusher secret now** (App Keys → roll secret). The current one is
-  exposed in clients and git history.
-- Never commit secrets; load them from env vars on the server.
+- **Rotate the Pusher secret** (Pusher dashboard → App Keys → roll secret).
+  The previous secret was exposed in client binaries and git history.
+- Set the new `PUSHER_APP_ID` / `PUSHER_KEY` / `PUSHER_SECRET` /
+  `PUSHER_CLUSTER` as Vercel env vars; never commit them.
+- Remove any baked-in secret/key strings from `PusherService.swift` and
+  `web/index.html` (already done in this repo).
 
-## Recommendation
+## Outcome
 
-**Option B** for a shareable heart-rate stream: it removes the secret from all
-clients, eliminates the browser crypto requirement (and the `importKey` error), and
-gives you a place to add validation/persistence. The cost is running a small server
-and routing iOS publishes through it.
+Option B is now live: the secret is server-only, the web client uses no
+browser crypto, and the API gives a natural place to enforce validation
+(BPM range, `shareId` shape) and could later host persistence or rate limiting.
+The cost is a single tiny Vercel function per request.
 
 Sources:
 - Pusher — What is an event? (client-event restrictions): https://pusher.com/docs/channels/using_channels/events/

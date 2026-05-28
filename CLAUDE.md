@@ -89,7 +89,7 @@ One line: `AirPods/Watch → HealthKit → iOS app → HTTPS POST → Vercel →
 - **HeartRateStreamer.swift**: Coordination layer. Forwards each BPM update to the UI via `onHeartRateUpdate` **and** to `PusherService` for publishing.
 - **PusherService.swift**: POSTs `{ bpm, timestamp, source, shareId }` to `/api/heartbeat` on the Vercel base URL via `URLSession`. Rate-limited to max one publish every 2 seconds.
 - **ContentView.swift**: SwiftUI view displaying current BPM, last update time, data source, and connection status. Owns streaming state and error handling.
-- **ShareIdStore.swift**: Generates/persists an 8-char share ID in `UserDefaults`. NOTE: the current stream uses a hard-coded `shareId = "live"`; per-user share IDs are not yet wired into the publish path.
+- **ShareId**: the stream uses a hard-coded `shareId = "live"` (set in `ContentView.swift`). A previous `ShareIdStore` that minted per-install IDs was removed; per-user share IDs are not currently wired into the publish path. The server still validates `shareId` against `^[A-Za-z0-9]{4,32}$`, so re-introducing per-user IDs is a drop-in change on both sides.
 
 ### 2. Web Client (Vanilla JS)
 - **web/index.html** → served at `/` (default): the **Nebula** visualization. Subscribes to Pusher and drives a breathing nebula animation. On each update it sets CSS `animation-duration = 60/bpm` seconds so the visuals beat at the real heart rate, using a two-peak lub-dub `@keyframes pulse` (systolic peak ~14% of cycle, diastolic ~34%) over brightness/saturation/hue/scale filters. A synthesized lub-dub heartbeat sound (Web Audio) can be toggled on.
@@ -125,7 +125,6 @@ ios/HeartBeatStream/HeartBeatStream/HeartBeatStream/
 ├── HealthKitManager.swift      # HealthKit queries & authorization
 ├── HeartRateStreamer.swift     # Coordination layer (UI + publish)
 ├── PusherService.swift         # POSTs BPM to /api/heartbeat
-├── ShareIdStore.swift          # Share ID persistence
 └── HeartBeatStream.entitlements # HealthKit capability
 
 api/
