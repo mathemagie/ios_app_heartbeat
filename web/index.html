@@ -638,8 +638,28 @@
     // files. It beats at the same 60/BPM period as the nebula. Off by
     // default; browsers require a user gesture before audio can start.
     let audioCtx = null;
+    let masterBus = null; // shared limiter all thumps route through
     let soundOn = false;
     let beatTimer = null;
+
+    // Master output level for the synthesized heartbeat (default loudness).
+    const MASTER_VOLUME = 3.0;
+
+    // Build a master bus: gain → limiter → speakers. The compressor acts as a
+    // limiter so the boosted MASTER_VOLUME gets perceived loudness without
+    // clipping/distortion on the peaks.
+    function ensureMasterBus() {
+      if (masterBus) return masterBus;
+      const limiter = audioCtx.createDynamicsCompressor();
+      limiter.threshold.setValueAtTime(-3, audioCtx.currentTime); // start limiting near 0 dBFS
+      limiter.knee.setValueAtTime(2, audioCtx.currentTime);
+      limiter.ratio.setValueAtTime(20, audioCtx.currentTime);     // hard limiting
+      limiter.attack.setValueAtTime(0.002, audioCtx.currentTime);
+      limiter.release.setValueAtTime(0.12, audioCtx.currentTime);
+      limiter.connect(audioCtx.destination);
+      masterBus = limiter;
+      return masterBus;
+    }
 
     // A low-pass filtered thump simulating chest cavity muffling and resonance.
     function thump(at, freq, peak, dur, type = "sine") {
@@ -663,12 +683,12 @@
       
       // Amplitude envelope
       gain.gain.setValueAtTime(0.0001, at);
-      gain.gain.linearRampToValueAtTime(peak, at + 0.015);
+      gain.gain.linearRampToValueAtTime(peak * MASTER_VOLUME, at + 0.015);
       gain.gain.exponentialRampToValueAtTime(0.0001, at + dur);
       
       osc.connect(gain);
       gain.connect(lowpass);
-      lowpass.connect(audioCtx.destination);
+      lowpass.connect(ensureMasterBus());
       
       osc.start(at);
       osc.stop(at + dur + 0.02);
@@ -720,6 +740,7 @@
       soundOn = on;
       if (on) {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        ensureMasterBus();
         audioCtx.resume().catch(() => {}); // required after the unlocking gesture
         scheduleBeats();
       } else {
