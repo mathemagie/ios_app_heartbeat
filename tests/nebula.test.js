@@ -2,7 +2,7 @@
 
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const Nebula = require("../web/nebula.js");
+const Nebula = require("../src/web/nebula.js");
 
 test("clampBpm keeps in-range values untouched", () => {
   assert.equal(Nebula.clampBpm(60), 60);

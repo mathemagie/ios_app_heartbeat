@@ -16,7 +16,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-PROJECT="$REPO_ROOT/ios/HeartBeatStream/HeartBeatStream/HeartBeatStream.xcodeproj"
+PROJECT="$REPO_ROOT/src/ios/HeartBeatStream/HeartBeatStream/HeartBeatStream.xcodeproj"
 SCHEME="HeartBeatStream"
 BUNDLE_ID="com.aurelienfache.HeartBeatStream"
 SIMULATOR="${1:-iPhone 17 Pro}"

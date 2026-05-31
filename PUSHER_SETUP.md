@@ -98,7 +98,7 @@ The POST should also appear in the Pusher dashboard **Debug Console** as a
 
 ## Step 4 — Point the iOS app at your backend
 
-Open `ios/HeartBeatStream/HeartBeatStream/HeartBeatStream/PusherService.swift`.
+Open `src/ios/HeartBeatStream/HeartBeatStream/HeartBeatStream/PusherService.swift`.
 The base URL is read from the `HEARTBEAT_API_BASE_URL` key in `Info.plist`,
 falling back to a hard-coded default:
 
@@ -134,7 +134,7 @@ Watch the Xcode console for `📤 Published heart rate: N BPM` lines.
 
 ### Web
 
-- Production: visit your Vercel URL — `/` serves `web/index.html`.
+- Production: visit your Vercel URL — `/` serves `src/web/index.html`.
 - Local against `vercel dev`: `http://localhost:3000/index.html`.
 - Local web-only (no API): `make web` → `http://localhost:8000/index.html`
   (will fail to fetch `/api/config` and fall back to a baked-in default key —
@@ -147,10 +147,10 @@ the nebula start breathing at the live BPM.
 
 ```bash
 make test
-# node --test "test/**/*.test.js"
+# node --test "tests/**/*.test.js"
 ```
 
-Covers the pure helpers in `web/nebula.js` (BPM clamping, period math, pulse
+Covers the pure helpers in `src/web/nebula.js` (BPM clamping, period math, pulse
 curve, validation).
 
 ## Troubleshooting

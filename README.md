@@ -21,17 +21,19 @@ runtime from `/api/config`.
 
 ## Project Layout
 
-- `ios/HeartBeatStream/HeartBeatStream/HeartBeatStream/` — SwiftUI app
+- `src/ios/HeartBeatStream/HeartBeatStream/HeartBeatStream/` — SwiftUI app
   - `HealthKitManager.swift` — HealthKit authorization and heart rate observation
   - `HeartRateStreamer.swift` — coordinates HealthKit data flow to UI and Pusher
   - `PusherService.swift` — POSTs BPM updates to `/api/heartbeat`
   - `ContentView.swift` — main UI (current BPM, status, source); hard-codes `shareId = "live"`
   - `AppDelegate.swift` — app entry point
-- `api/heartbeat.py` — Vercel function: validates input, triggers Pusher event
-- `api/config.py` — Vercel function: returns the public Pusher `{key, cluster}`
-- `web/index.html` — Heart Nebula visualization (subscribes to `heartrate-live`)
-- `web/nebula.js` — pure, DOM-free helpers shared by the page and tests
-- `test/nebula.test.js` — Node built-in test runner suite
+- `src/api/heartbeat.py` — Vercel function: validates input, triggers Pusher event
+- `src/api/config.py` — Vercel function: returns the public Pusher `{key, cluster}`
+- `src/web/index.html` — Heart Nebula visualization (subscribes to `heartrate-live`)
+- `src/web/architecture.html` — design/architecture explainer page
+- `src/web/nebula.js` — pure, DOM-free helpers shared by the page and tests
+- `tests/nebula.test.js` — Node built-in test runner suite
+- `pages_index/index.html` — Heart Nebula explainer published via GitHub Pages
 - `PUSHER_SETUP.md` — full Pusher + Vercel setup walkthrough
 - `PUSHER_ARCHITECTURE.md` — design notes on why the secret moved server-side
 
@@ -40,7 +42,7 @@ runtime from `/api/config`.
 1. **iOS app** requests HealthKit read access, observes new heart-rate samples
    with `HKObserverQuery` + `HKAnchoredObjectQuery`, and POSTs each reading to
    `https://<your-vercel-app>/api/heartbeat` as JSON.
-2. **Vercel function (`api/heartbeat.py`)** validates the payload (BPM in
+2. **Vercel function (`src/api/heartbeat.py`)** validates the payload (BPM in
    20–300, `shareId` matching `^[A-Za-z0-9]{4,32}$`), then calls the Pusher
    REST API to publish event `heartrate-update` on the **public** channel
    `heartrate-{shareId}` (currently always `heartrate-live`).
@@ -80,7 +82,7 @@ In Vercel → your project → **Settings → Environment Variables**, set:
 
 - **Deploy:** `make deploy` (runs `npx vercel --prod`). Note the deployment URL.
 - **Run locally:** `make dev` starts `vercel dev` on `http://localhost:3000`,
-  serving both `api/` and `web/`.
+  serving both `src/api/` and `src/web/`.
 
 ### 4. Point the iOS app at your Vercel URL
 
@@ -110,7 +112,7 @@ make help        # list all targets
 make dev         # full stack locally (vercel dev on :3000)
 make web         # web only (python http.server on :8000)
 make ios-sim     # build/install/launch on the iOS Simulator
-make test        # node --test "test/**/*.test.js"
+make test        # node --test "tests/**/*.test.js"
 make deploy      # npx vercel --prod
 ```
 

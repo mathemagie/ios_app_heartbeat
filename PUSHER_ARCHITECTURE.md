@@ -66,8 +66,8 @@ small server endpoint that holds the secret.
 
 ## Option B — Public channel + server publishes (implemented)
 
-This is what the repo does today. The Vercel function in `api/heartbeat.py` is
-the server; `api/config.py` exposes the public key to the web page. iOS no
+This is what the repo does today. The Vercel function in `src/api/heartbeat.py` is
+the server; `src/api/config.py` exposes the public key to the web page. iOS no
 longer talks to Pusher directly. The flow:
 
 1. **iOS** sends each BPM to your server: `POST /heartbeat` with `{ shareId, bpm, … }`.
@@ -81,7 +81,7 @@ longer talks to Pusher directly. The flow:
 - **Cons:** iOS no longer talks to Pusher directly (it talks to your server); you must
   deploy and run a server.
 
-### Actual server (Vercel Python — see `api/heartbeat.py`)
+### Actual server (Vercel Python — see `src/api/heartbeat.py`)
 ```python
 import os, pusher
 client = pusher.Pusher(
@@ -113,7 +113,7 @@ channel.bind("heartrate-update", (data) => { /* update UI */ });
 - Set the new `PUSHER_APP_ID` / `PUSHER_KEY` / `PUSHER_SECRET` /
   `PUSHER_CLUSTER` as Vercel env vars; never commit them.
 - Remove any baked-in secret/key strings from `PusherService.swift` and
-  `web/index.html` (already done in this repo).
+  `src/web/index.html` (already done in this repo).
 
 ## Outcome
 

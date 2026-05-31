@@ -3,8 +3,8 @@
 
 # --- Config ---------------------------------------------------------------
 IOS_SCHEME    := HeartBeatStream
-IOS_PROJECT   := ios/HeartBeatStream/HeartBeatStream/HeartBeatStream.xcodeproj
-WEB_DIR       := web
+IOS_PROJECT   := src/ios/HeartBeatStream/HeartBeatStream/HeartBeatStream.xcodeproj
+WEB_DIR       := src/web
 WEB_PORT      ?= 8000
 DEV_PORT      ?= 3000
 
@@ -35,7 +35,7 @@ web-open: ## Open the nebula page in the default browser
 # --- iOS app --------------------------------------------------------------
 .PHONY: ios-open
 ios-open: ## Open the iOS app in Xcode
-	xed ios/HeartBeatStream
+	xed src/ios/HeartBeatStream
 
 .PHONY: ios-build
 ios-build: ## Build the iOS app (generic iOS device)
@@ -52,7 +52,7 @@ ios-clean: ## Clean the iOS build
 # --- Tests ----------------------------------------------------------------
 .PHONY: test
 test: ## Run the web app unit tests (Node built-in test runner)
-	node --test "test/**/*.test.js"
+	node --test "tests/**/*.test.js"
 
 # --- Backend / deploy -----------------------------------------------------
 .PHONY: install
