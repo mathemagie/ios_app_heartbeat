@@ -30,6 +30,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `make dev` — runs the full stack locally (`npx vercel dev` on `DEV_PORT`, default 3000), including the `api/` functions. Use this to test `/api/heartbeat` and `/api/config` end-to-end before deploying.
 - Inspect recent deploys with `npx vercel ls`; check function logs with `npx vercel logs <deployment-url>`.
 
+**GitHub Pages (the explainer page):**
+- The static explainer in `pages_index/` is published to GitHub Pages at
+  `https://mathemagie.github.io/nebula/` by the **`.github/workflows/pages.yml`**
+  Actions workflow (Pages `build_type` is **`workflow`**, not the legacy
+  branch/`/docs` build). It uploads `pages_index/` as-is — no Jekyll
+  (a `pages_index/.nojekyll` marker is included). The workflow runs on pushes
+  that touch `pages_index/**` (or via manual `workflow_dispatch`).
+
 ## Architecture Overview
 
 This is a real-time heart rate streaming system: heart rate is captured on iOS via HealthKit, POSTed to a Vercel serverless function, published to a public Pusher channel, and rendered live in the browser (a "nebula" visualization that beats in sync with the heart).
