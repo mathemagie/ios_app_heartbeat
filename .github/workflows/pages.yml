@@ -1,0 +1,41 @@
+name: Deploy GitHub Pages
+
+# Publishes the static Heart Nebula explainer in pages_index/ to GitHub Pages.
+# Replaces the old legacy build-from-/docs setup (the folder was renamed to
+# pages_index/ in the src/ reorg). No Jekyll: the directory is served as-is.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "pages_index/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload pages_index/ as the Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages_index
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
