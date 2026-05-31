@@ -25,6 +25,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `make dev` — runs the full stack locally (`npx vercel dev` on `DEV_PORT`, default 3000), including the `api/` functions. Use this to test `/api/heartbeat` and `/api/config` end-to-end before deploying.
 - Inspect recent deploys with `npx vercel ls`; check function logs with `npx vercel logs <deployment-url>`.
 
+**GitHub Pages (explainer site):**
+- A static "Heart Nebula" explainer page is served via GitHub Pages from the `docs/` folder (`docs/index.html`).
+- Config: source = `main` branch, `/docs` path; HTTPS enforced; public.
+- Live at: https://mathemagie.github.io/nebula/
+- **Auto-deploys on push to `main`** — any change to `docs/` rebuilds and republishes automatically (separate from the manual `make deploy` Vercel flow).
+- Inspect with `gh api repos/mathemagie/nebula/pages`; check builds with `gh api repos/mathemagie/nebula/pages/builds/latest`.
+
 ## Architecture Overview
 
 This is a real-time heart rate streaming system: heart rate is captured on iOS via HealthKit, POSTed to a Vercel serverless function, published to a public Pusher channel, and rendered live in the browser (a "nebula" visualization that beats in sync with the heart).
