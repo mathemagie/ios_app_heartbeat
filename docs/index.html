@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Heart Nebula — how a heartbeat travels from your ear to a breathing star</title>
+<meta name="description" content="An explainer for Heart Nebula: read your heart rate from AirPods or an Apple Watch, stream it through Vercel and Pusher, and render it as a nebula that beats in real time on the web." />
+
+<!-- Open Graph -->
+<meta property="og:title" content="Heart Nebula — explainer" />
+<meta property="og:description" content="From the PPG sensor in your ear to a star that breathes in the browser. Here's the whole path." />
+<meta property="og:type" content="website" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=Hanken+Grotesk:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+
+<style>
+  :root {
+    --void:        #06060c;
+    --void-2:      #0b0a16;
+    --panel:       #100e1f;
+    --line:        #241f3d;
+    --text:        #ece9f7;
+    --muted:       #9b94bd;
+    --faint:       #6a6390;
+
+    --heart:       #ff3c6e;   /* the beat */
+    --plasma:      #8b6bff;   /* violet */
+    --ion:         #34e6ff;   /* cyan */
+    --ember:       #ff8a5c;   /* warm */
+
+    --display: "Fraunces", Georgia, serif;
+    --body:    "Hanken Grotesk", system-ui, sans-serif;
+    --mono:    "Space Mono", ui-monospace, monospace;
+
+    --bpm: 62;
+    --beat: 0.9677s; /* 60 / 62 */
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background: var(--void);
+    color: var(--text);
+    font-family: var(--body);
+    font-size: 18px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* ---- Atmosphere: layered nebula glows + grain ---- */
+  .atmosphere {
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    background:
+      radial-gradient(60vw 60vw at 18% 12%, rgba(139,107,255,0.20), transparent 60%),
+      radial-gradient(50vw 50vw at 85% 22%, rgba(52,230,255,0.13), transparent 60%),
+      radial-gradient(70vw 70vw at 70% 95%, rgba(255,60,110,0.16), transparent 62%),
+      radial-gradient(45vw 45vw at 8% 88%, rgba(255,138,92,0.10), transparent 60%),
+      var(--void);
+  }
+  .grain {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.05;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* ---- Layout shell ---- */
+  .wrap {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 28px;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 26px 0 0;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .topbar .mark { display: flex; align-items: center; gap: 10px; color: var(--text); }
+  .topbar .dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--heart);
+    box-shadow: 0 0 14px var(--heart);
+    animation: beat var(--beat) ease-in-out infinite;
+  }
+  .topbar a { color: var(--muted); text-decoration: none; transition: color .2s; }
+  .topbar a:hover { color: var(--ion); }
+
+  /* ---- Hero ---- */
+  .hero {
+    position: relative;
+    padding: 90px 0 70px;
+    text-align: center;
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+    color: var(--ion);
+    margin: 0 0 28px;
+  }
+  .hero h1 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(46px, 9vw, 104px);
+    line-height: 0.96;
+    letter-spacing: -0.02em;
+    margin: 0 0 8px;
+  }
+  .hero h1 em {
+    font-style: italic;
+    color: transparent;
+    background: linear-gradient(95deg, var(--heart), var(--plasma) 55%, var(--ion));
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+  .hero .lede {
+    max-width: 560px;
+    margin: 26px auto 0;
+    font-size: 20px;
+    color: var(--muted);
+  }
+  .hero .lede strong { color: var(--text); font-weight: 600; }
+
+  /* ---- The breathing orb ---- */
+  .orb-stage {
+    position: relative;
+    height: 280px;
+    margin: 46px auto 10px;
+    display: grid;
+    place-items: center;
+  }
+  .orb {
+    position: relative;
+    width: 188px; height: 188px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 38% 34%, #fff 0%, rgba(255,255,255,0.0) 14%),
+      radial-gradient(circle at 50% 50%, var(--heart) 0%, var(--plasma) 46%, var(--ion) 86%);
+    box-shadow:
+      0 0 60px rgba(139,107,255,0.55),
+      0 0 130px rgba(255,60,110,0.40),
+      inset -18px -24px 60px rgba(6,6,12,0.6);
+    animation: beat var(--beat) ease-in-out infinite;
+    filter: saturate(1.1);
+  }
+  .orb::before, .orb::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(255,60,110,0.5);
+    animation: ripple var(--beat) ease-out infinite;
+  }
+  .orb::after { animation-delay: calc(var(--beat) * 0.34); border-color: rgba(52,230,255,0.4); }
+
+  .readout {
+    position: absolute;
+    bottom: 6px;
+    font-family: var(--mono);
+    color: var(--muted);
+    font-size: 13px;
+    letter-spacing: 0.12em;
+  }
+  .readout b { color: var(--text); font-size: 17px; }
+
+  @keyframes beat {
+    0%   { transform: scale(1); }
+    14%  { transform: scale(1.085); }  /* lub — systolic */
+    28%  { transform: scale(1.0); }
+    34%  { transform: scale(1.05); }   /* dub — diastolic */
+    48%  { transform: scale(1); }
+    100% { transform: scale(1); }
+  }
+  @keyframes ripple {
+    0%   { transform: scale(1); opacity: 0.7; }
+    70%  { transform: scale(1.7); opacity: 0; }
+    100% { transform: scale(1.7); opacity: 0; }
+  }
+
+  /* ---- Section scaffolding ---- */
+  section.chapter { padding: 56px 0; border-top: 1px solid var(--line); }
+  .chapter-head {
+    display: flex;
+    align-items: baseline;
+    gap: 18px;
+    margin-bottom: 28px;
+  }
+  .chapter-num {
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--heart);
+    letter-spacing: 0.1em;
+  }
+  .chapter h2 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(28px, 4.4vw, 42px);
+    line-height: 1.05;
+    letter-spacing: -0.015em;
+    margin: 0;
+  }
+  .chapter p { margin: 0 0 18px; color: #cfc9e6; }
+  .chapter p.muted { color: var(--muted); }
+  .lead { font-size: 21px; color: var(--text) !important; }
+
+  code, .mono { font-family: var(--mono); }
+  p code, li code {
+    background: rgba(139,107,255,0.12);
+    border: 1px solid var(--line);
+    color: #d9d3f5;
+    padding: 1px 6px;
+    border-radius: 5px;
+    font-size: 0.84em;
+  }
+
+  /* ---- Flow diagram ---- */
+  .flow {
+    margin: 8px 0 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .flow-step {
+    display: grid;
+    grid-template-columns: 54px 1fr;
+    gap: 18px;
+    padding: 16px 18px;
+    background: linear-gradient(120deg, var(--panel), rgba(16,14,31,0.4));
+    border: 1px solid var(--line);
+    border-radius: 14px;
+  }
+  .flow-icon {
+    font-size: 24px;
+    display: grid; place-items: center;
+    width: 54px; height: 54px;
+    border-radius: 12px;
+    background: var(--void-2);
+    border: 1px solid var(--line);
+  }
+  .flow-step h4 {
+    margin: 2px 0 2px;
+    font-family: var(--body);
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .flow-step p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .flow-step .tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ion);
+    letter-spacing: 0.05em;
+  }
+  .flow-arrow {
+    text-align: center;
+    color: var(--faint);
+    font-family: var(--mono);
+    line-height: 1;
+    padding: 7px 0;
+    font-size: 15px;
+  }
+
+  /* ---- Parts grid ---- */
+  .parts {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-top: 6px;
+  }
+  .part {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 22px 22px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  .part::after {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 3px;
+    background: var(--accent, var(--plasma));
+    opacity: 0.85;
+  }
+  .part.ios   { --accent: var(--ion); }
+  .part.cloud { --accent: var(--plasma); }
+  .part.pump  { --accent: var(--ember); }
+  .part.web   { --accent: var(--heart); }
+  .part .kicker {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent, var(--plasma));
+  }
+  .part h3 {
+    font-family: var(--display);
+    font-weight: 500;
+    font-size: 23px;
+    margin: 8px 0 10px;
+  }
+  .part p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .part ul { margin: 12px 0 0; padding-left: 18px; font-size: 13.5px; color: var(--muted); }
+  .part li { margin-bottom: 5px; }
+
+  /* ---- Code block ---- */
+  pre {
+    margin: 18px 0;
+    padding: 20px 22px;
+    background: #07060f;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.7;
+    color: #cdc7ea;
+  }
+  pre .c { color: var(--faint); font-style: italic; }
+  pre .k { color: var(--plasma); }
+  pre .s { color: var(--ember); }
+  pre .n { color: var(--ion); }
+  pre .h { color: var(--heart); }
+
+  .figure-cap {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--faint);
+    text-align: center;
+    margin-top: -6px;
+  }
+
+  /* ---- Callout ---- */
+  .callout {
+    border-left: 2px solid var(--heart);
+    padding: 4px 0 4px 20px;
+    margin: 22px 0;
+    color: var(--muted);
+    font-style: italic;
+  }
+  .callout strong { color: var(--text); font-style: normal; }
+
+  /* ---- Next steps ---- */
+  .steps { list-style: none; margin: 8px 0 0; padding: 0; }
+  .steps li {
+    padding: 14px 0;
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: 30px 1fr;
+    gap: 14px;
+    color: var(--muted);
+  }
+  .steps li b { color: var(--text); font-weight: 600; }
+  .steps .glyph { color: var(--ion); font-family: var(--mono); }
+
+  /* ---- Footer ---- */
+  footer {
+    border-top: 1px solid var(--line);
+    padding: 50px 0 70px;
+    text-align: center;
+  }
+  .cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--mono);
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    text-decoration: none;
+    color: var(--void);
+    background: linear-gradient(95deg, var(--heart), var(--plasma));
+    padding: 13px 24px;
+    border-radius: 999px;
+    font-weight: 700;
+    transition: transform .2s, box-shadow .2s;
+    box-shadow: 0 0 0 rgba(255,60,110,0);
+  }
+  .cta:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(255,60,110,0.35); }
+  .cta.ghost {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--line);
+  }
+  .footlinks { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin: 8px 0 26px; }
+  .colophon {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--faint);
+    line-height: 1.9;
+  }
+  .colophon a { color: var(--muted); text-decoration: none; }
+  .colophon a:hover { color: var(--ion); }
+
+  /* reveal on scroll */
+  .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s ease, transform .7s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+
+  @media (max-width: 680px) {
+    body { font-size: 17px; }
+    .parts { grid-template-columns: 1fr; }
+    .hero { padding: 64px 0 40px; }
+    .flow-step { grid-template-columns: 44px 1fr; gap: 14px; }
+    .flow-icon { width: 44px; height: 44px; font-size: 20px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .orb, .orb::before, .orb::after, .topbar .dot { animation: none !important; }
+    .reveal { opacity: 1; transform: none; }
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="atmosphere"></div>
+<div class="grain"></div>
+
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="mark"><span class="dot"></span> Heart&nbsp;Nebula</div>
+    <nav>
+      <a href="#flow">flow</a> ·
+      <a href="#parts">parts</a> ·
+      <a href="#math">math</a> ·
+      <a href="https://github.com/mathemagie/nebula">source ↗</a>
+    </nav>
+  </div>
+
+  <!-- HERO -->
+  <header class="hero">
+    <p class="eyebrow">A single heartbeat, made visible</p>
+    <h1>Your pulse,<br>as a breathing <em>star</em></h1>
+    <p class="lede">
+      A sensor in your ear feels your heart beat. Seconds later, a
+      <strong>nebula in someone's browser</strong> swells and dims in the
+      exact same rhythm. This is the whole path — sensor to star.
+    </p>
+
+    <div class="orb-stage">
+      <div class="orb" aria-hidden="true"></div>
+      <div class="readout">streaming · <b id="bpm">62</b> BPM</div>
+    </div>
+  </header>
+
+  <!-- 01 — IDEA -->
+  <section class="chapter reveal">
+    <div class="chapter-head">
+      <span class="chapter-num">01</span>
+      <h2>The idea, in one breath</h2>
+    </div>
+    <p class="lead">
+      A heartbeat is private, internal, invisible. Heart Nebula takes that
+      hidden signal and pushes it out into the world as something everyone
+      can watch in real time.
+    </p>
+    <p class="muted">
+      The in-ear PPG sensor on AirPods Pro 3 — or the optical sensor on an
+      Apple Watch — reads your beats per minute. The number leaves your phone,
+      crosses the internet, and lands as a living visual: a nebula that pulses
+      on every beat, beating <em>now</em>, not on a recording. When your heart
+      speeds up, so does the star.
+    </p>
+  </section>
+
+  <!-- 02 — MENTAL MODEL -->
+  <section class="chapter reveal">
+    <div class="chapter-head">
+      <span class="chapter-num">02</span>
+      <h2>The mental model</h2>
+    </div>
+    <p>
+      Think of it as a <strong>relay race for one number</strong>. The baton
+      is your current BPM. It's handed off four times — phone, cloud function,
+      broadcast network, browser — and each runner only does one small,
+      honest job.
+    </p>
+    <p class="muted">
+      Two ideas make the whole thing safe and simple. First: the phone never
+      talks to the broadcast network directly — a tiny server stands in the
+      middle and keeps the one secret that could be abused. Second: the stream
+      is <em>public</em> and one-way. The browser only ever <em>listens</em>;
+      it can't push anything back. That's why the page can be a flat,
+      buildless HTML file with nothing to leak.
+    </p>
+  </section>
+
+  <!-- 03 — FLOW -->
+  <section id="flow" class="chapter reveal">
+    <div class="chapter-head">
+      <span class="chapter-num">03</span>
+      <h2>The journey of one beat</h2>
+    </div>
+    <p class="muted">Follow a single reading from your chest to the screen.</p>
+
+    <div class="flow">
+      <div class="flow-step">
+        <div class="flow-icon">❤️</div>
+        <div>
+          <span class="tag">SENSOR</span>
+          <h4>AirPods Pro 3 / Apple Watch</h4>
+          <p>An optical (PPG) sensor counts beats and writes the BPM into Apple Health.</p>
+        </div>
+      </div>
+      <div class="flow-arrow">↓ &nbsp;HealthKit sample</div>
+
+      <div class="flow-step">
+        <div class="flow-icon">📱</div>
+        <div>
+          <span class="tag">iOS APP · SwiftUI</span>
+          <h4>HealthKit → Pusher service</h4>
+          <p>Observes only new samples, then POSTs <code>{ bpm, time, source }</code> — at most once every 2 s.</p>
+        </div>
+      </div>
+      <div class="flow-arrow">↓ &nbsp;HTTPS POST /api/heartbeat</div>
+
+      <div class="flow-step">
+        <div class="flow-icon">☁️</div>
+        <div>
+          <span class="tag">VERCEL · PYTHON</span>
+          <h4>Serverless validator</h4>
+          <p>Checks the BPM is sane (20–300), then re-broadcasts it. Holds the one secret the client never sees.</p>
+        </div>
+      </div>
+      <div class="flow-arrow">↓ &nbsp;Pusher REST trigger</div>
+
+      <div class="flow-step">
+        <div class="flow-icon">📡</div>
+        <div>
+          <span class="tag">PUSHER CHANNELS</span>
+          <h4>Real-time fan-out</h4>
+          <p>Pushes the event down a public WebSocket to every connected browser at once.</p>
+        </div>
+      </div>
+      <div class="flow-arrow">↓ &nbsp;WebSocket: heartrate-update</div>
+
+      <div class="flow-step">
+        <div class="flow-icon">🌌</div>
+        <div>
+          <span class="tag">WEB · VANILLA JS</span>
+          <h4>The nebula breathes</h4>
+          <p>Sets <code>animation-duration = 60 / bpm</code> so the visuals beat at your exact heart rate.</p>
+        </div>
+      </div>
+    </div>
+
+    <p class="figure-cap">sensor → phone → cloud → network → star · usually under a second end-to-end</p>
+  </section>
+
+  <!-- 04 — PARTS -->
+  <section id="parts" class="chapter reveal">
+    <div class="chapter-head">
+      <span class="chapter-num">04</span>
+      <h2>The four moving parts</h2>
+    </div>
+    <p class="muted">Each piece is small on purpose. Here's what each one owns.</p>
+
+    <div class="parts">
+      <div class="part ios">
+        <span class="kicker">Capture</span>
+        <h3>iOS app</h3>
+        <p>SwiftUI app that reads Health data and forwards it.</p>
+        <ul>
+          <li><code>HealthKitManager</code> — anchored queries fetch only new beats</li>
+          <li><code>HeartRateStreamer</code> — feeds the UI and the publisher</li>
+          <li><code>PusherService</code> — rate-limited POST to the cloud</li>
+        </ul>
+      </div>
+
+      <div class="part cloud">
+        <span class="kicker">Gatekeep</span>
+        <h3>Vercel function</h3>
+        <p>A few lines of Python that validate and re-broadcast.</p>
+        <ul>
+          <li><code>/api/heartbeat</code> — checks BPM, triggers the event</li>
+          <li><code>/api/config</code> — hands the browser the public key only</li>
+          <li>The Pusher <em>secret</em> lives here, never in the client</li>
+        </ul>
+      </div>
+
+      <div class="part pump">
+        <span class="kicker">Broadcast</span>
+        <h3>Pusher Channels</h3>
+        <p>The real-time backbone.</p>
+        <ul>
+          <li>Channel <code>heartrate-live</code>, event <code>heartrate-update</code></li>
+          <li>Public &amp; one-way — clients subscribe, never publish</li>
+          <li>WebSocket fan-out to unlimited viewers</li>
+        </ul>
+      </div>
+
+      <div class="part web">
+        <span class="kicker">Render</span>
+        <h3>Web nebula</h3>
+        <p>One HTML file. No framework, no build.</p>
+        <ul>
+          <li><code>index.html</code> — the breathing visualization</li>
+          <li><code>nebula.js</code> — pure helpers, also unit-tested in Node</li>
+          <li>Optional synthesized <em>lub-dub</em> heartbeat sound</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 — MATH -->
+  <section id="math" class="chapter reveal">
+    <div class="chapter-head">
+      <span class="chapter-num">05</span>
+      <h2>Making pixels beat like a heart</h2>
+    </div>
+    <p>
+      A real heartbeat isn't a single thump — it's <em>lub-dub</em>: a strong
+      systolic squeeze, then a softer diastolic one. The nebula copies that
+      shape exactly. The whole trick is turning a BPM number into the length
+      of one animation cycle:
+    </p>
+
+<pre><span class="c">// one cardiac cycle, in seconds</span>
+<span class="k">const</span> period = <span class="n">60</span> / bpm;          <span class="c">// 62 BPM → 0.97 s per beat</span>
+orb.style.<span class="h">animationDuration</span> = period + <span class="s">"s"</span>;
+
+<span class="c">// the two-peak pulse, as CSS keyframes</span>
+@keyframes pulse {
+  <span class="n">0%</span>   { transform: scale(1);     }
+  <span class="n">14%</span>  { transform: scale(1.085); } <span class="c">/* lub — systole  */</span>
+  <span class="n">34%</span>  { transform: scale(1.05);  } <span class="c">/* dub — diastole */</span>
+  <span class="n">48%</span>  { transform: scale(1);     }
+  <span class="n">100%</span> { transform: scale(1);     } <span class="c">/* rest until next */</span>
+}</pre>
+
+    <p class="muted">
+      Because the duration is recomputed on every reading, the star is always
+      locked to your live rate. The same curve drives brightness, saturation,
+      hue and scale at once — so the nebula doesn't just pulse, it
+      <em>glows</em> on the beat.
+    </p>
+
+    <div class="callout">
+      <strong>Why a buildless file?</strong> The browser only listens to a
+      public stream and animates with CSS. There's no state to protect and
+      nothing to compile — so the whole client is a single file you can read
+      top to bottom.
+    </div>
+  </section>
+
+  <!-- 06 — SAFETY -->
+  <section class="chapter reveal">
+    <div class="chapter-head">
+      <span class="chapter-num">06</span>
+      <h2>Privacy &amp; the honest secret</h2>
+    </div>
+    <p class="muted">
+      Heart-rate data is personal, so the design is deliberately careful:
+    </p>
+    <ul style="color:var(--muted); padding-left:20px;">
+      <li>Health data is read <strong>only with your explicit permission</strong>, and only the BPM number leaves the phone — no names, no identity.</li>
+      <li>The Pusher <strong>secret lives only on the server</strong>; the browser receives just the public key, so it can listen but never broadcast.</li>
+      <li>The server <strong>rejects bogus values</strong> (anything outside 20–300 BPM) before anything is published.</li>
+      <li>The stream is a <strong>public capability link</strong>: anyone with the URL can watch the beat, so treat the address like a key.</li>
+    </ul>
+  </section>
+
+  <!-- NEXT -->
+  <section class="chapter reveal">
+    <div class="chapter-head">
+      <span class="chapter-num">→</span>
+      <h2>Where you could take it</h2>
+    </div>
+    <ul class="steps">
+      <li><span class="glyph">01</span><span><b>Per-person stars.</b> The server already validates a <code>shareId</code> — wire it through and everyone gets their own private nebula URL.</span></li>
+      <li><span class="glyph">02</span><span><b>A constellation.</b> Render many hearts at once — a room of people beating side by side.</span></li>
+      <li><span class="glyph">03</span><span><b>Memory.</b> Record a session and replay a sprint, a scare, or a calm evening as a time-lapse.</span></li>
+      <li><span class="glyph">04</span><span><b>Other sensors.</b> Anything that lands in Apple Health — or any device that can POST a number — can drive the same star.</span></li>
+    </ul>
+  </section>
+
+</div><!-- /wrap -->
+
+<footer>
+  <div class="wrap">
+    <div class="footlinks">
+      <a class="cta" href="https://github.com/mathemagie/nebula">Read the source ↗</a>
+      <a class="cta ghost" href="https://github.com/mathemagie/nebula/blob/main/PUSHER_ARCHITECTURE.md">Architecture notes</a>
+    </div>
+    <p class="colophon">
+      Heart&nbsp;Nebula · AirPods/Watch → HealthKit → iOS → Vercel → Pusher → browser<br>
+      A single-file explainer · no build step · beats at <span id="bpm2">62</span> BPM while you read<br>
+      <a href="https://github.com/mathemagie/nebula">github.com/mathemagie/nebula</a>
+    </p>
+  </div>
+</footer>
+
+<script>
+  // Reveal sections on scroll.
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+    }
+  }, { threshold: 0.12 });
+  document.querySelectorAll(".reveal").forEach((el) => io.observe(el));
+
+  // Gently drift the displayed BPM so the page feels alive (resting-rate wander).
+  const bpmEl = document.getElementById("bpm");
+  const bpm2El = document.getElementById("bpm2");
+  function tick() {
+    // Slow sinusoidal wander around a 62 BPM resting rate, so the page feels alive.
+    const drift = Math.sin(performance.now() / 4200) * 4;
+    const shown = Math.round(62 + drift);
+    if (bpmEl) bpmEl.textContent = shown;
+    if (bpm2El) bpm2El.textContent = shown;
+    // retune the live beat to the shown rate
+    const beat = (60 / shown).toFixed(4) + "s";
+    document.documentElement.style.setProperty("--beat", beat);
+    requestAnimationFrame(tick);
+  }
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!reduce) requestAnimationFrame(tick);
+</script>
+</body>
+</html>
