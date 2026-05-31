@@ -547,7 +547,7 @@
     <div class="hud-card">
       <div class="bpm idle" id="bpm">--</div>
       <div class="unit">BPM</div>
-      <div class="meta waiting" id="meta">Default beat · waiting for Aurélien's…</div>
+      <div class="meta waiting" id="meta">Default beat · waiting for Aurélien's heart…</div>
     </div>
   </div>
 
@@ -638,16 +638,19 @@
     // files. It beats at the same 60/BPM period as the nebula. Off by
     // default; browsers require a user gesture before audio can start.
     let audioCtx = null;
-    let masterBus = null; // shared limiter all thumps route through
+    let masterBus = null;  // shared limiter every thump routes into
+    let masterGain = null; // final fade stage after the limiter
     let soundOn = false;
     let beatTimer = null;
 
     // Master output level for the synthesized heartbeat (default loudness).
     const MASTER_VOLUME = 3.0;
 
-    // Build a master bus: gain → limiter → speakers. The compressor acts as a
-    // limiter so the boosted MASTER_VOLUME gets perceived loudness without
-    // clipping/distortion on the peaks.
+    // Build a master bus: thumps → limiter → fade gain → speakers. The
+    // compressor acts as a limiter so the boosted MASTER_VOLUME gets perceived
+    // loudness without clipping; the trailing gain lets the sound *arrive*
+    // (Law 8 TRUST: ramp in over the first beats so the first tap never blasts
+    // the listener — "wow", not "woah").
     function ensureMasterBus() {
       if (masterBus) return masterBus;
       const limiter = audioCtx.createDynamicsCompressor();
@@ -656,9 +659,24 @@
       limiter.ratio.setValueAtTime(20, audioCtx.currentTime);     // hard limiting
       limiter.attack.setValueAtTime(0.002, audioCtx.currentTime);
       limiter.release.setValueAtTime(0.12, audioCtx.currentTime);
-      limiter.connect(audioCtx.destination);
+
+      masterGain = audioCtx.createGain();
+      masterGain.gain.setValueAtTime(0.0001, audioCtx.currentTime); // start silent; fadeIn() ramps it up
+
+      limiter.connect(masterGain);
+      masterGain.connect(audioCtx.destination);
       masterBus = limiter;
       return masterBus;
+    }
+
+    // Law 8 (TRUST): the heartbeat fades up over ~2 beats instead of detonating.
+    function fadeInMaster() {
+      if (!masterGain) return;
+      const now = audioCtx.currentTime;
+      const rampSeconds = Math.min(2.5, Nebula.bpmToPeriodSeconds(beatBpm) * 2);
+      masterGain.gain.cancelScheduledValues(now);
+      masterGain.gain.setValueAtTime(0.0001, now);
+      masterGain.gain.linearRampToValueAtTime(1, now + rampSeconds);
     }
 
     // A low-pass filtered thump simulating chest cavity muffling and resonance.
@@ -742,15 +760,25 @@
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         ensureMasterBus();
         audioCtx.resume().catch(() => {}); // required after the unlocking gesture
+        fadeInMaster(); // Law 8: arrive gently, don't blast
         scheduleBeats();
+        // Law 1 (EMBODY): confirm the heartbeat is now audible — and loud —
+        // with a brief "playing" flash, then let the hint recede.
+        soundHint.textContent = "♪ playing";
+        soundHint.classList.add("show");
+        clearTimeout(soundHintTimer);
+        soundHintTimer = setTimeout(() => soundHint.classList.remove("show"), 1600);
       } else {
         clearTimeout(beatTimer);
+        soundHint.classList.remove("show");
       }
       soundBtn.classList.toggle("on", on);
       soundBtn.setAttribute("aria-pressed", String(on));
-      soundHint.classList.remove("show"); // dismiss the nudge once acted on
+      // Law 3 (TIME): remember the choice so returning visitors aren't re-taught.
+      try { localStorage.setItem("nebulaSoundOn", on ? "1" : "0"); } catch (e) { /* storage blocked */ }
     }
 
+    let soundHintTimer = null;
     soundBtn.addEventListener("click", () => setSound(!soundOn));
 
     // Law 4 (LEARN): reveal the sound feature once, then recede and never nag.
@@ -762,6 +790,19 @@
         localStorage.setItem("nebulaSoundHintSeen", "1");
       }
     } catch (e) { /* storage blocked — simply skip the hint */ }
+
+    // Law 3 (TIME): a returning visitor who left the sound ON shouldn't be
+    // re-taught it exists. Autoplay rules forbid starting audio without a
+    // gesture, so we can't resume silently — instead arm the button with a
+    // quiet "tap to resume" nudge. Their next tap on it picks up where they
+    // left off. (Returning sound-on users already saw the intro hint, so this
+    // never collides with the one-time nudge above.)
+    try {
+      if (localStorage.getItem("nebulaSoundOn") === "1") {
+        soundHint.textContent = "♪ tap to resume";
+        soundHint.classList.add("show");
+      }
+    } catch (e) { /* storage blocked — skip resume nudge */ }
 
     // Help overlay: the top-left mark opens it (Law 2: the title is also
     // the "what is this?" affordance); "Esc" / tap closes.

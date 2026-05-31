@@ -123,3 +123,6 @@ Temporary Items
 
 # Playwright MCP artifacts
 .playwright-mcp/
+
+# Antigravity CLI artifacts
+.antigravitycli/

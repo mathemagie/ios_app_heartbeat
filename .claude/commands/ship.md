@@ -17,8 +17,9 @@ Steps:
    ```
 
 4. Commit. If on `main`, that's fine for this project (production is a manual deploy).
-5. Run `make deploy` to push the current tree to Vercel production via `npx vercel --prod`.
-6. Report the deployment URL from the `make deploy` output.
+5. Push the commit to the remote with `git push`.
+6. Run `make deploy` to push the current tree to Vercel production via `npx vercel --prod`.
+7. Report the deployment URL from the `make deploy` output.
 
 If there are no changes to commit, skip the commit and go straight to `make deploy`.
 If `make deploy` fails (e.g. not authenticated), surface the error and suggest
