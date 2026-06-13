@@ -34,6 +34,9 @@ runtime from `/api/config`.
 - `src/web/nebula.js` — pure, DOM-free helpers shared by the page and tests
 - `tests/nebula.test.js` — Node built-in test runner suite
 - `pages_index/index.html` — Heart Nebula explainer published via GitHub Pages
+  at [mathemagie.github.io/nebula](https://mathemagie.github.io/nebula/)
+- `.github/workflows/pages.yml` — GitHub Actions workflow that deploys
+  `pages_index/` to GitHub Pages on every push that touches it
 - `PUSHER_SETUP.md` — full Pusher + Vercel setup walkthrough
 - `PUSHER_ARCHITECTURE.md` — design notes on why the secret moved server-side
 
