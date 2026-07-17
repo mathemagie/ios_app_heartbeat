@@ -11,6 +11,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **iOS App:**
 - Open in Xcode: `xed src/ios/HeartBeatStream`
 - Build via CLI: `xcodebuild -scheme HeartBeatStream -destination 'generic/platform=iOS' build`
+- **Build, install & launch on iPhone:** `./scripts/run-device.sh`
+  - Optional arg picks the device by name, UDID, serial number, or CoreDevice identifier: `./scripts/run-device.sh 21792BF7-B83C-5120-9FBE-300D1A746176`
+  - The script uses repo-local build output under `build/device/`, signs with team `3KVD49BW46`, installs via `xcrun devicectl`, and launches `com.aurelienfache.HeartBeatStream`.
 - **Build, install & launch on simulator:** `./scripts/run-simulator.sh` (optional arg picks the device, e.g. `./scripts/run-simulator.sh "iPhone 16"`)
 - **Note:** HealthKit requires a real iOS device with a heart rate source (AirPods Pro 3 in-ear sensor, or a paired Apple Watch). The Simulator has no heart-rate sensor, so live BPM stays at `--`; use it only to test UI and the Pusher connection.
 
@@ -182,6 +185,13 @@ pages_index/
 2. Serve the web client: `python3 -m http.server --directory src/web 8000` (or use the Vercel deployment).
 3. Open `http://localhost:8000/index.html` (nebula).
 4. Verify BPM updates arrive in real time over the `heartrate-live` Pusher channel.
+
+**iPhone Install Troubleshooting:**
+- Connect and unlock the iPhone, accept Trust This Computer, and enable Developer Mode under Settings > Privacy & Security > Developer Mode.
+- If iOS blocks launch with Untrusted Developer, open Settings > General > VPN & Device Management, choose the developer profile, and tap Trust.
+- If signing/provisioning fails, re-authenticate the Apple ID in Xcode Settings > Accounts and confirm the development team can provision `com.aurelienfache.HeartBeatStream`.
+- To capture launch logs from the installed app, run:
+  `xcrun devicectl --timeout 20 device process launch --device DEVICE_ID --console --terminate-existing com.aurelienfache.HeartBeatStream`
 
 ## Security & Configuration
 
